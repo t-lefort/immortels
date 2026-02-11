@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getDb, closeDb } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,10 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// Initialize database
+const db = getDb();
+console.log('[DB] SQLite database initialized');
 
 // Middleware
 app.use(express.json());
@@ -47,3 +52,16 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
   console.log(`[SERVER] Les Immortels running on http://localhost:${PORT}`);
 });
+
+// Graceful shutdown
+function shutdown() {
+  console.log('[SERVER] Shutting down...');
+  server.close(() => {
+    closeDb();
+    console.log('[SERVER] Goodbye');
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
