@@ -101,7 +101,7 @@ Paramètres stockés : `game_status` (`setup`/`in_progress`/`finished`), `admin_
 
 ### Table `votes`
 
-Seuls les vrais votes sont stockés (pas les réponses au calcul mental des villageois — un simple compteur côté serveur suffit pour la progression).
+Tous les votes réels sont stockés, y compris les devinettes des villageois la nuit.
 
 | Colonne | Type | Description |
 |---------|------|-------------|
@@ -109,7 +109,7 @@ Seuls les vrais votes sont stockés (pas les réponses au calcul mental des vill
 | phase_id | INTEGER | FK → phases.id |
 | voter_id | INTEGER | FK → players.id |
 | target_id | INTEGER NULL | FK → players.id (NULL si abstention) |
-| vote_type | TEXT | `wolf`, `ghost_eliminate`, `village` |
+| vote_type | TEXT | `wolf`, `ghost_eliminate`, `village`, `villager_guess` |
 | is_valid | BOOLEAN | Le vote a-t-il été compté |
 
 ### Table `ghost_identifications`
@@ -209,8 +209,8 @@ Quand l'admin lance une phase de nuit :
 
 1. **Tous les joueurs vivants** voient un écran de vote sur leur téléphone
 2. Les **loups** voient la liste des joueurs vivants (hors loups) et sélectionnent un nom
-3. Les **villageois** voient un calcul mental généré aléatoirement (difficulté moyenne : multiplication à 2 chiffres, additions composées, etc.) et doivent sélectionner la bonne réponse parmi plusieurs. En cas de mauvaise réponse, un **timer de quelques secondes** s'impose avant de pouvoir répondre à nouveau. Aucune pénalité de scoring — le but est uniquement de **camoufler les loups** en occupant tout le monde sur son téléphone pendant un temps comparable.
-4. L'admin voit en temps réel combien de joueurs ont voté/répondu (le compteur englobe loups + villageois, sans distinction)
+3. Les **villageois** voient la liste des joueurs vivants (hors eux-mêmes) et choisissent un joueur qu'ils pensent être villageois (devinette). Même UX que le vote loup (sélection d'un joueur + confirmation). **+1 point si le joueur choisi est effectivement villageois.** Sert aussi de **camouflage** — tout le monde est sur son téléphone, il est impossible de distinguer loups et villageois.
+4. L'admin voit en temps réel combien de joueurs ont voté (le compteur englobe loups + villageois devinette, sans distinction)
 5. **En parallèle, les fantômes** votent pour éliminer quelqu'un (chacun sélectionne un joueur vivant). Un **délai court** est imposé pour voter, afin d'éviter que les fantômes se concertent physiquement.
 6. **Les fantômes villageois** peuvent en plus sélectionner des joueurs qu'ils soupçonnent d'être des loups (case à cocher sur chaque joueur vivant)
 7. Quand tous ont voté (ou que l'admin force la clôture), l'app calcule les résultats et les affiche à l'admin :
@@ -261,7 +261,7 @@ Les scores sont calculés automatiquement par l'app à chaque fin de phase. **Le
 
 | Condition | Points | Quand c'est calculé |
 |-----------|--------|---------------------|
-| Étape survécue (chaque nuit ou conseil passé en vie) | +1 | Fin de chaque phase, pour chaque joueur vivant |
+| Villageois devine un villageois la nuit | +1 | Fin de nuit, si le joueur choisi est effectivement villageois |
 | Équipe gagne une épreuve | +1 | Quand l'admin entre le résultat de l'épreuve (uniquement joueurs vivants de l'équipe) |
 | Survivant final | +3 | Fin de la partie |
 | Villageois vote contre un loup au conseil | +2 | Fin de chaque conseil, pour chaque villageois vivant ayant voté pour un loup (même si le loup n'est pas éliminé) |
@@ -287,16 +287,23 @@ Les scores sont calculés automatiquement par l'app à chaque fin de phase. **Le
 - Le joueur entre son nom et attend
 - L'admin voit la liste des joueurs connectés en temps réel et peut lancer la partie quand tout le monde est prêt
 
+#### Écran de révélation du rôle
+- Affiché **une seule fois** au démarrage du jeu, quand l'admin lance la partie
+- Montre le rôle du joueur (loup ou villageois) avec **protection anti-screenshot** : overlay CSS avec watermark dynamique (nom du joueur en filigrane, animation rapide, `mix-blend-mode`)
+- Un bouton "J'ai compris" ferme l'écran définitivement
+- **Le rôle n'est plus accessible ensuite** — le joueur doit le retenir
+
 #### Écran d'attente
 - Affiché quand aucune phase n'est en cours
-- Montre : le rôle du joueur, son statut (vivant/fantôme), la liste des joueurs éliminés et leur rôle
+- Montre : le statut du joueur (vivant/fantôme), la liste des joueurs éliminés et leur rôle
 - Si le joueur est loup et que la phase 1 est passée : affiche la liste des autres loups
 - Si le joueur a un rôle spécial : affiche le détail de son pouvoir
+- **Le rôle de base (loup/villageois) n'est PAS réaffiché** sur cet écran
 
 #### Écran de vote — Nuit (joueur vivant)
 - **Si loup** : Liste des joueurs vivants (hors loups) avec sélection d'un seul joueur + bouton "Voter"
-- **Si villageois** : Calcul mental généré aléatoirement (difficulté moyenne). Choix multiple. En cas de mauvaise réponse, un timer de quelques secondes avant de pouvoir réessayer. Pas de pénalité — le but est d'occuper le joueur pendant que les loups votent.
-- Indicateur : "En attente des votes... X/Y ont voté" (compteur commun loups + villageois, sans distinction)
+- **Si villageois** : Liste des joueurs vivants (hors soi-même) — le villageois choisit un joueur qu'il pense être villageois (devinette). Même UX que le vote loup (sélection + confirmation). +1 point si correct. Sert de camouflage : tout le monde est sur son téléphone.
+- Indicateur : "En attente des votes... X/Y ont voté" (compteur commun loups + villageois devinette, sans distinction)
 - Le joueur ne peut pas changer son vote après envoi
 
 #### Écran de vote — Nuit (fantôme)
@@ -417,7 +424,7 @@ L'admin doit pouvoir modifier n'importe quel aspect du jeu pour corriger des bug
 |-----------|---------|----------|
 | `player:join` | `{ name }` | Joueurs (pré-jeu) |
 | `vote:submit` | `{ phaseId, targetId }` | Joueurs (loups, fantômes, village) |
-| `villager:answered` | `{ phaseId }` | Villageois (confirmation calcul mental fait, pas de contenu stocké) |
+| `villager:guess` | `{ phaseId, targetId }` | Villageois (devinette nuit — choisit un joueur qu'il pense être villageois) |
 | `ghost:identify` | `{ phaseId, targetIds: [...] }` | Fantômes villageois |
 | `special:response` | `{ type, data }` | Joueur concerné (réponse sorcière, voyante, chasseur, protecteur, maire) |
 | `admin:start_game` | `{}` | Admin |

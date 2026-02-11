@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Les Immortels** is a real-time web app for managing a Werewolf (Loup-Garou) game played over a weekend with ~30 players. The full specification lives in `PITCH.md` (written in French). The project is in the specification/planning phase — no implementation code exists yet.
+**Les Immortels** is a real-time web app for managing a Werewolf (Loup-Garou) game played over a weekend with ~30 players. The full specification lives in `PITCH.md` (written in French). The full implementation plan lives in `PLAN.md`.
 
 **Core principle:** The admin (Thomas) has total manual control over every step of the game. The app never auto-advances phases. Every result must be validated by the admin before being revealed. The admin can modify any aspect of the game at any time to fix bugs or errors.
 
@@ -49,8 +49,9 @@ les-immortels/
 ## Key Game Mechanics
 
 - 29 players: 8 wolves + 21 villagers, ~18 phases across 3 days
-- Night = single phase with parallel votes (wolves + villagers math puzzle + ghosts)
-- Villagers solve random math puzzles at night to camouflage wolf voting activity (no scoring impact)
+- Night = single phase with parallel votes (wolves + villagers guess + ghosts)
+- Villagers choose a player they think is a villager at night (+1 if correct) — same UX as wolf vote, serves as camouflage
+- Role is shown once at game start with anti-screenshot protection, never re-displayed
 - Council phases: speech order + timer (>10 alive) or 10-min free debate (≤10 alive), then vote
 - Eliminated players become ghosts who vote each night + villager ghosts can identify wolves
 - 6 special roles earned through challenges — one role per player max, challenge teams entered manually by admin
@@ -63,7 +64,7 @@ les-immortels/
 - **`players`**: id, name (unique), role (wolf/villager), special_role (one max), status (alive/ghost), session_token, score
 - **`phases`**: id, type (night/village_council), status (pending/active/voting/completed), timestamps
 - **`phase_victims`**: phase_id, player_id, eliminated_by, was_protected, was_resurrected (supports multiple victims per phase)
-- **`votes`**: phase_id, voter_id, target_id, vote_type (wolf/ghost_eliminate/village), is_valid — only real votes stored, not villager math answers
+- **`votes`**: phase_id, voter_id, target_id, vote_type (wolf/ghost_eliminate/village/villager_guess), is_valid
 - **`ghost_identifications`**: phase_id, ghost_id, target_id, target_is_wolf
 - **`challenges`**: name, winning team player IDs, special_role_awarded, awarded_to_player_id
 
@@ -71,7 +72,7 @@ les-immortels/
 
 Server→Client: `lobby:update`, `game:started`, `phase:started`, `phase:vote_update`, `phase:result`, `player:eliminated`, `player:role_assigned`, `wolves:revealed`, `timer:start` (client-side countdown), `game:end`, `special:prompt`
 
-Client→Server: `player:join`, `vote:submit`, `villager:answered`, `ghost:identify`, `special:response`, `admin:start_game`, `admin:start_phase`, `admin:close_votes`, `admin:reveal_result`, `admin:start_timer`
+Client→Server: `player:join`, `vote:submit`, `villager:guess`, `ghost:identify`, `special:response`, `admin:start_game`, `admin:start_phase`, `admin:close_votes`, `admin:reveal_result`, `admin:start_timer`
 
 ## Resilience Requirements
 
