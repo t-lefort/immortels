@@ -1,0 +1,89 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { io } from 'socket.io-client';
+
+export function useAdminSocket() {
+  const socketRef = useRef(null);
+  const [connected, setConnected] = useState(false);
+  const [lastEvent, setLastEvent] = useState(null);
+  const listenersRef = useRef({});
+
+  const connect = useCallback(() => {
+    if (socketRef.current?.connected) return;
+
+    const password = localStorage.getItem('admin_password');
+    if (!password) return;
+
+    const socket = io({
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('connect', () => {
+      setConnected(true);
+      socket.emit('admin:join', { password });
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
+    });
+
+    // Forward all game events
+    const events = [
+      'state:sync',
+      'lobby:update',
+      'game:started',
+      'game:end',
+      'game:reset',
+      'phase:started',
+      'phase:voting_opened',
+      'phase:voting_closed',
+      'phase:result',
+      'phase:vote_update',
+      'player:eliminated',
+      'player:role_assigned',
+      'wolves:revealed',
+      'timer:start',
+      'speech:order',
+      'special:prompt',
+      'special:result',
+    ];
+
+    for (const event of events) {
+      socket.on(event, (data) => {
+        setLastEvent({ type: event, data, timestamp: Date.now() });
+        // Call registered listeners
+        const listeners = listenersRef.current[event];
+        if (listeners) {
+          for (const fn of listeners) fn(data);
+        }
+      });
+    }
+
+    socketRef.current = socket;
+  }, []);
+
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setConnected(false);
+    }
+  }, []);
+
+  const on = useCallback((event, callback) => {
+    if (!listenersRef.current[event]) {
+      listenersRef.current[event] = [];
+    }
+    listenersRef.current[event].push(callback);
+
+    return () => {
+      listenersRef.current[event] = listenersRef.current[event].filter(fn => fn !== callback);
+    };
+  }, []);
+
+  useEffect(() => {
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
+
+  return { connected, lastEvent, on, connect, disconnect };
+}

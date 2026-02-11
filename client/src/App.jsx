@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import AdminPage from './pages/admin/AdminPage.jsx';
 
 function PlayPage() {
   return (
@@ -6,17 +7,6 @@ function PlayPage() {
       <div className="text-center">
         <h1 className="text-4xl font-bold text-white mb-4">Les Immortels</h1>
         <p className="text-villager text-lg">Interface Joueur</p>
-      </div>
-    </div>
-  );
-}
-
-function AdminPage() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-white mb-4">Les Immortels</h1>
-        <p className="text-wolf text-lg">Administration</p>
       </div>
     </div>
   );

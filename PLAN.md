@@ -8,7 +8,7 @@ Application web temps réel pour gérer un jeu de Loup-Garou ("Les Immortels") j
 
 ---
 
-## Phase 1 — Scaffolding du projet
+## Phase 1 — Scaffolding du projet ✅
 
 Créer la structure complète du projet, installer les dépendances, configurer Vite + Tailwind + Docker.
 
@@ -27,7 +27,7 @@ Créer la structure complète du projet, installer les dépendances, configurer 
 
 ---
 
-## Phase 2 — Base de données SQLite
+## Phase 2 — Base de données SQLite ✅
 
 **Fichier : `server/db.js`**
 
@@ -51,7 +51,7 @@ Pragmas : WAL mode, foreign keys ON. Valeurs par défaut insérées à l'init.
 
 ---
 
-## Phase 3 — Fondation serveur
+## Phase 3 — Fondation serveur ✅
 
 **Fichiers :**
 - `server/index.js` — Express + HTTP server + Socket.IO (pingTimeout 60s, pingInterval 25s), middleware JSON/cookie-parser, montage des routes, SPA fallback
@@ -66,7 +66,7 @@ Pragmas : WAL mode, foreign keys ON. Valeurs par défaut insérées à l'init.
 
 ---
 
-## Phase 4 — Moteur de jeu (logique pure)
+## Phase 4 — Moteur de jeu (logique pure) ✅
 
 **Fichier : `server/game-engine.js`**
 
@@ -87,7 +87,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 5 — API + interface Admin
+## Phase 5 — API + interface Admin ✅
 
 **Routes API (`server/routes/admin.js`, toutes protégées par `adminAuth`) :**
 
@@ -116,7 +116,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 6 — API + interface Joueur
+## Phase 6 — API + interface Joueur XXX
 
 **Routes API (`server/routes/player.js` + `server/routes/game.js`) :**
 - `POST /api/player/join { name }`, `GET /api/player/me`, `GET /api/game/state`, `GET /api/game/phase/:id`
