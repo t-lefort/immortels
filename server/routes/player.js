@@ -131,8 +131,14 @@ router.get('/me', requirePlayer, (req, res) => {
     }
   }
 
+  // Score is hidden from players until the game is finished
+  const responsePlayer = { ...player };
+  if (gameStatus !== 'finished') {
+    delete responsePlayer.score;
+  }
+
   res.json({
-    ...player,
+    ...responsePlayer,
     gameStatus,
     currentPhase,
     hasVoted,

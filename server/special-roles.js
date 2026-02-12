@@ -443,6 +443,10 @@ export function processChasseurResponse(io, targetId, phaseId) {
   const target = db.prepare('SELECT id, name, role, special_role FROM players WHERE id = ?').get(Number(targetId));
   if (!target) throw new Error(`Player ${targetId} not found`);
 
+  // Save the hunter player ID BEFORE clearing it
+  const hunterPlayerIdStr = getSetting('hunter_player_id');
+  const hunterId = hunterPlayerIdStr ? Number(hunterPlayerIdStr) : null;
+
   // Determine phase for the elimination record
   const effectivePhaseId = phaseId || (getCurrentPhase()?.id) || null;
 
@@ -456,13 +460,6 @@ export function processChasseurResponse(io, targetId, phaseId) {
   updatePlayerRooms(io, Number(targetId), 'ghost');
 
   // Compute hunter scoring: +2 if wolf, -1 if villager
-  const hunterPlayerIdStr = getSetting('hunter_player_id');
-  // We already cleared it, so let's get the hunter from the DB
-  const hunters = db.prepare(
-    "SELECT id FROM players WHERE special_role = 'chasseur'"
-  ).all();
-
-  // Score changes for the hunter
   let scoreDelta = 0;
   let scoreReason = '';
   if (target.role === 'wolf') {
@@ -473,20 +470,8 @@ export function processChasseurResponse(io, targetId, phaseId) {
     scoreReason = 'hunter_killed_villager';
   }
 
-  if (scoreDelta !== 0) {
-    // Apply score to all hunters (there should only be one, but handle edge cases)
-    const addScore = db.prepare('UPDATE players SET score = score + ? WHERE special_role = ? AND id != ?');
-    // Actually, we need to find the specific hunter who shot
-    // The hunter is the one who was just eliminated; use ghost status
-    // We need to track which hunter triggered this. Let's use a simpler approach:
-    // The most recently eliminated player with special_role='chasseur'
-    const recentHunter = db.prepare(
-      "SELECT id FROM players WHERE special_role = 'chasseur' AND status = 'ghost' ORDER BY eliminated_at_phase DESC LIMIT 1"
-    ).get();
-
-    if (recentHunter) {
-      db.prepare('UPDATE players SET score = score + ? WHERE id = ?').run(scoreDelta, recentHunter.id);
-    }
+  if (scoreDelta !== 0 && hunterId) {
+    db.prepare('UPDATE players SET score = score + ? WHERE id = ?').run(scoreDelta, hunterId);
   }
 
   // Broadcast elimination

@@ -576,7 +576,7 @@ function computeNightScores(db, phaseId, changes, addScore) {
     }
   }
 
-  // --- Ghost wolf bonus: +3 if they voted for the ghost victim and victim is a villager ---
+  // --- Ghost wolf bonus: +3 for ALL ghost wolves if a villager was eliminated by ghosts ---
   const ghostVictim = db.prepare(`
     SELECT pv.player_id, p.role AS victim_role
     FROM phase_victims pv
@@ -585,18 +585,14 @@ function computeNightScores(db, phaseId, changes, addScore) {
   `).get(phaseId);
 
   if (ghostVictim && ghostVictim.victim_role === 'villager') {
-    // Find ghost wolves who voted for this victim
-    const ghostWolfVotes = db.prepare(`
-      SELECT v.voter_id, voter.name AS voter_name
-      FROM votes v
-      JOIN players voter ON v.voter_id = voter.id
-      WHERE v.phase_id = ? AND v.vote_type = 'ghost_eliminate' AND v.target_id = ? AND v.is_valid = 1
-        AND voter.role = 'wolf' AND voter.status = 'ghost'
-    `).all(phaseId, ghostVictim.player_id);
+    // All ghost wolves get +3 when a villager is eliminated by ghost vote
+    const ghostWolves = db.prepare(`
+      SELECT id, name FROM players WHERE role = 'wolf' AND status = 'ghost'
+    `).all();
 
-    for (const vote of ghostWolfVotes) {
-      addScore.run(3, vote.voter_id);
-      changes.push({ playerId: vote.voter_id, playerName: vote.voter_name, delta: 3, reason: 'ghost_wolf_eliminated_villager' });
+    for (const gw of ghostWolves) {
+      addScore.run(3, gw.id);
+      changes.push({ playerId: gw.id, playerName: gw.name, delta: 3, reason: 'ghost_wolf_eliminated_villager' });
     }
   }
 }
