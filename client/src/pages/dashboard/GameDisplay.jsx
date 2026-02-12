@@ -166,25 +166,42 @@ export default function GameDisplay({ players, currentPhase, children }) {
 
                     {/* Role badge */}
                     {player.role && (
-                      <span
-                        className="font-bold uppercase shrink-0 ml-[0.5vw]"
-                        style={{
-                          fontSize: '0.9vw',
-                          padding: '0.2vw 0.6vw',
-                          borderRadius: '0.3vw',
-                          background: player.role === 'wolf'
-                            ? 'rgba(139, 0, 0, 0.3)'
-                            : 'rgba(26, 26, 78, 0.3)',
-                          color: player.role === 'wolf'
-                            ? '#ff4444'
-                            : '#6a7fdb',
-                          border: `1px solid ${player.role === 'wolf'
-                            ? 'rgba(139, 0, 0, 0.5)'
-                            : 'rgba(26, 26, 78, 0.5)'}`,
-                        }}
-                      >
-                        {player.role === 'wolf' ? 'LOUP' : 'VILLAGEOIS'}
-                      </span>
+                      <div className="flex items-center gap-[0.3vw] shrink-0 ml-[0.5vw]">
+                        <span
+                          className="font-bold uppercase"
+                          style={{
+                            fontSize: '0.9vw',
+                            padding: '0.2vw 0.6vw',
+                            borderRadius: '0.3vw',
+                            background: player.role === 'wolf'
+                              ? 'rgba(139, 0, 0, 0.3)'
+                              : 'rgba(26, 26, 78, 0.3)',
+                            color: player.role === 'wolf'
+                              ? '#ff4444'
+                              : '#6a7fdb',
+                            border: `1px solid ${player.role === 'wolf'
+                              ? 'rgba(139, 0, 0, 0.5)'
+                              : 'rgba(26, 26, 78, 0.5)'}`,
+                          }}
+                        >
+                          {player.role === 'wolf' ? 'LOUP' : 'VILLAGEOIS'}
+                        </span>
+                        {player.special_role && player.special_role !== 'maire' && (
+                          <span
+                            className="font-bold uppercase"
+                            style={{
+                              fontSize: '0.8vw',
+                              padding: '0.2vw 0.5vw',
+                              borderRadius: '0.3vw',
+                              background: 'rgba(168, 85, 247, 0.25)',
+                              color: '#c084fc',
+                              border: '1px solid rgba(168, 85, 247, 0.4)',
+                            }}
+                          >
+                            {player.special_role}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))

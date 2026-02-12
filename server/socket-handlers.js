@@ -249,9 +249,9 @@ function sendDashboardStateSync(socket) {
     }
   }
 
-  // Public player list (id, name, status, special_role — no tokens, no base roles)
+  // Public player list (id, name, status, role, special_role — no tokens)
   const players = db
-    .prepare('SELECT id, name, status, special_role FROM players ORDER BY id')
+    .prepare('SELECT id, name, status, role, special_role FROM players ORDER BY id')
     .all();
 
   const playerCount = players.length;

@@ -19,7 +19,7 @@ router.get('/state', (_req, res) => {
   }
 
   const players = db
-    .prepare('SELECT id, name, status, special_role FROM players ORDER BY id')
+    .prepare('SELECT id, name, status, role, special_role FROM players ORDER BY id')
     .all();
 
   res.json({
