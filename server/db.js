@@ -190,6 +190,7 @@ export function resetGame() {
     DELETE FROM phases;
     DELETE FROM players;
     DELETE FROM game_settings;
+    DELETE FROM sqlite_sequence;
   `);
   initDefaultSettings();
 }
