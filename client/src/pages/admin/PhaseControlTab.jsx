@@ -312,6 +312,19 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
         <SpecialRolesPanel players={players} currentPhase={currentPhase} />
       )}
 
+      {/* Force Vote Panel */}
+      {currentPhase && currentPhase.status === 'voting' && (
+        <ForceVotePanel
+          players={players}
+          currentPhase={currentPhase}
+          voteDetails={voteDetails}
+          onVoteForced={() => {
+            loadVoteDetails(currentPhase.id);
+            loadResults(currentPhase.id);
+          }}
+        />
+      )}
+
       {/* Vote Details */}
       {voteDetails && currentPhase && (
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
@@ -383,6 +396,213 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
           onReveal={handleReveal}
         />
       )}
+    </div>
+  );
+}
+
+function ForceVotePanel({ players, currentPhase, voteDetails, onVoteForced }) {
+  const [selectedVoter, setSelectedVoter] = useState('');
+  const [selectedTarget, setSelectedTarget] = useState('');
+  const [selectedVoteType, setSelectedVoteType] = useState('');
+  const [forceLoading, setForceLoading] = useState(false);
+  const [forceMessage, setForceMessage] = useState(null);
+
+  // Determine which vote types are relevant for this phase
+  const isNight = currentPhase.type === 'night';
+  const voteTypes = isNight
+    ? [
+        { value: 'wolf', label: 'Loup' },
+        { value: 'villager_guess', label: 'Devinette villageois' },
+        { value: 'ghost_eliminate', label: 'Fantôme' },
+      ]
+    : [{ value: 'village', label: 'Conseil du village' }];
+
+  // Build set of voter IDs who already voted, keyed by vote type
+  const votedByType = {};
+  if (voteDetails?.details) {
+    for (const v of voteDetails.details) {
+      if (!votedByType[v.vote_type]) votedByType[v.vote_type] = new Set();
+      votedByType[v.vote_type].add(v.voter_id);
+    }
+  }
+
+  // Determine eligible voters based on selected vote type
+  const getEligibleVoters = () => {
+    if (!selectedVoteType) return [];
+    const alreadyVoted = votedByType[selectedVoteType] || new Set();
+
+    return players.filter(p => {
+      // Skip players who already voted for this type
+      if (alreadyVoted.has(p.id)) return false;
+
+      switch (selectedVoteType) {
+        case 'wolf':
+          return p.role === 'wolf' && p.status === 'alive';
+        case 'villager_guess':
+          // Villager guess is normally for alive villagers, but admin can force for any alive player
+          return p.status === 'alive';
+        case 'ghost_eliminate':
+          return p.status === 'ghost';
+        case 'village':
+          return p.status === 'alive';
+        default:
+          return false;
+      }
+    });
+  };
+
+  // Determine eligible targets based on selected vote type
+  const getEligibleTargets = () => {
+    if (!selectedVoteType) return [];
+
+    switch (selectedVoteType) {
+      case 'wolf':
+        // Wolves vote for alive non-wolves
+        return players.filter(p => p.status === 'alive' && p.role !== 'wolf');
+      case 'villager_guess':
+        // Villagers guess another alive player
+        return players.filter(p => p.status === 'alive' && p.id !== Number(selectedVoter));
+      case 'ghost_eliminate':
+        // Ghosts vote for alive players
+        return players.filter(p => p.status === 'alive');
+      case 'village':
+        // Village council: alive players vote for alive players
+        return players.filter(p => p.status === 'alive' && p.id !== Number(selectedVoter));
+      default:
+        return [];
+    }
+  };
+
+  const eligibleVoters = getEligibleVoters();
+  const eligibleTargets = getEligibleTargets();
+
+  async function handleForceVote() {
+    if (!selectedVoter || !selectedTarget || !selectedVoteType) return;
+
+    const voter = players.find(p => p.id === Number(selectedVoter));
+    const target = players.find(p => p.id === Number(selectedTarget));
+
+    if (!confirm(`Forcer le vote de ${voter?.name} pour ${target?.name} (${selectedVoteType}) ?`)) return;
+
+    setForceLoading(true);
+    setForceMessage(null);
+    try {
+      const result = await api.forceVote(
+        currentPhase.id,
+        Number(selectedVoter),
+        Number(selectedTarget),
+        selectedVoteType
+      );
+      setForceMessage({
+        type: 'success',
+        text: `Vote forcé : ${result.voterName} → ${result.targetName}${result.updated ? ' (mis à jour)' : ''}`,
+      });
+      setSelectedVoter('');
+      setSelectedTarget('');
+      onVoteForced();
+    } catch (err) {
+      setForceMessage({ type: 'error', text: err.message });
+    }
+    setForceLoading(false);
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <h2 className="text-lg font-semibold mb-3">Forcer un vote</h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Si un joueur ne peut pas voter sur son téléphone, vous pouvez forcer son vote ici.
+      </p>
+
+      {forceMessage && (
+        <div className={`px-3 py-2 rounded-lg text-sm mb-3 ${
+          forceMessage.type === 'success' ? 'bg-green-900/50 text-green-300 border border-green-800' :
+          'bg-red-900/50 text-red-300 border border-red-800'
+        }`}>
+          {forceMessage.text}
+          <button onClick={() => setForceMessage(null)} className="ml-2 text-gray-400 hover:text-white">&times;</button>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {/* Vote Type */}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Type de vote</label>
+          <select
+            value={selectedVoteType}
+            onChange={(e) => {
+              setSelectedVoteType(e.target.value);
+              setSelectedVoter('');
+              setSelectedTarget('');
+            }}
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+          >
+            <option value="">-- Choisir le type --</option>
+            {voteTypes.map(vt => (
+              <option key={vt.value} value={vt.value}>{vt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Voter */}
+        {selectedVoteType && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Joueur (n'a pas encore voté)
+              {eligibleVoters.length > 0 && (
+                <span className="ml-1 text-gray-500">({eligibleVoters.length} restant{eligibleVoters.length > 1 ? 's' : ''})</span>
+              )}
+            </label>
+            <select
+              value={selectedVoter}
+              onChange={(e) => {
+                setSelectedVoter(e.target.value);
+                setSelectedTarget('');
+              }}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+            >
+              <option value="">-- Choisir le votant --</option>
+              {eligibleVoters.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.role === 'wolf' ? 'loup' : 'villageois'}{p.status === 'ghost' ? ', fantôme' : ''})
+                </option>
+              ))}
+            </select>
+            {eligibleVoters.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">Tous les joueurs éligibles ont déjà voté.</p>
+            )}
+          </div>
+        )}
+
+        {/* Target */}
+        {selectedVoter && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Cible du vote</label>
+            <select
+              value={selectedTarget}
+              onChange={(e) => setSelectedTarget(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+            >
+              <option value="">-- Choisir la cible --</option>
+              {eligibleTargets.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Force button */}
+        {selectedVoter && selectedTarget && (
+          <button
+            onClick={handleForceVote}
+            disabled={forceLoading}
+            className="w-full py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 font-medium text-sm"
+          >
+            {forceLoading ? 'Envoi...' : 'Forcer le vote'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

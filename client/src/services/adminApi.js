@@ -188,6 +188,13 @@ export function resetGame() {
   return request('/game/reset', { method: 'POST' });
 }
 
+export function forceVote(phaseId, voterId, targetId, voteType) {
+  return request('/force-vote', {
+    method: 'POST',
+    body: JSON.stringify({ phaseId, voterId, targetId, voteType }),
+  });
+}
+
 export function wolfTieBreak(phaseId, targetId) {
   return request('/wolf-tie-break', {
     method: 'POST',

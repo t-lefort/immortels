@@ -12,6 +12,7 @@ import {
   getCurrentPhase,
   getVoteResults,
   getVoteDetails,
+  submitVote,
   resolveNight,
   resolveVillageCouncil,
   generateSpeechOrder,
@@ -31,6 +32,7 @@ import {
   emitToAdmin,
   emitToDashboard,
   updatePlayerRooms,
+  computeVoteCounts,
 } from '../socket-rooms.js';
 import { resyncPlayer } from '../socket-handlers.js';
 import {
@@ -1022,6 +1024,83 @@ router.post('/game/reset', (req, res) => {
   }
 
   res.json({ reset: true });
+});
+
+// ─── Force Vote ─────────────────────────────────────────────────────────────
+
+router.post('/force-vote', (req, res) => {
+  const { phaseId, voterId, targetId, voteType } = req.body;
+
+  if (!phaseId || !voterId || !targetId || !voteType) {
+    return res.status(400).json({ error: 'phaseId, voterId, targetId et voteType requis' });
+  }
+
+  const validVoteTypes = ['wolf', 'villager_guess', 'ghost_eliminate', 'village'];
+  if (!validVoteTypes.includes(voteType)) {
+    return res.status(400).json({
+      error: `Type de vote invalide: ${voteType}. Valeurs acceptées: ${validVoteTypes.join(', ')}`,
+    });
+  }
+
+  const db = getDb();
+
+  // Validate phase exists and is in voting status
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  if (!phase) {
+    return res.status(404).json({ error: 'Phase introuvable' });
+  }
+  if (phase.status !== 'voting') {
+    return res.status(400).json({ error: `Impossible de forcer un vote pour une phase en statut "${phase.status}"` });
+  }
+
+  // Validate voter exists
+  const voter = db.prepare('SELECT * FROM players WHERE id = ?').get(Number(voterId));
+  if (!voter) {
+    return res.status(404).json({ error: 'Joueur votant introuvable' });
+  }
+
+  // Validate target exists
+  const target = db.prepare('SELECT * FROM players WHERE id = ?').get(Number(targetId));
+  if (!target) {
+    return res.status(404).json({ error: 'Joueur cible introuvable' });
+  }
+
+  try {
+    const vote = submitVote(Number(phaseId), Number(voterId), Number(targetId), voteType);
+    logger.vote('Vote forced by admin', {
+      phaseId: Number(phaseId),
+      voterId: Number(voterId),
+      voterName: voter.name,
+      targetId: Number(targetId),
+      targetName: target.name,
+      voteType,
+      updated: !!vote.updated,
+    });
+
+    // Emit vote update with counts (same as normal vote flow)
+    const io = req.app.get('io');
+    if (io) {
+      const { voteCount, totalExpected } = computeVoteCounts(phase.id, phase.type);
+      emitToAll(io, 'phase:vote_update', {
+        phaseId: phase.id,
+        voteCount,
+        totalExpected,
+      });
+
+      // Re-sync the affected player so their UI shows the vote was submitted
+      resyncPlayer(io, Number(voterId));
+    }
+
+    res.json({
+      success: true,
+      voteType,
+      voterName: voter.name,
+      targetName: target.name,
+      updated: !!vote.updated,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.post('/wolf-tie-break', (req, res) => {
