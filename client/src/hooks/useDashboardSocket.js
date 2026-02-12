@@ -78,7 +78,18 @@ export function useDashboardSocket() {
     // ─── Lobby ──────────────────────────────────────────────────────
     socket.on('lobby:update', (data) => {
       if (data.playerCount !== undefined) setPlayerCount(data.playerCount);
-      if (data.players) setPlayers(data.players);
+      if (data.players) {
+        // Merge incoming lobby data with existing player data to preserve
+        // fields like status and special_role that lobby:update doesn't include.
+        // Without this merge, a player reconnecting mid-game would cause
+        // lobby:update to overwrite the rich player list with {id, name} only,
+        // making all player names disappear from the dashboard game display.
+        setPlayers((prev) => {
+          if (prev.length === 0) return data.players;
+          const prevMap = new Map(prev.map((p) => [p.id, p]));
+          return data.players.map((p) => ({ ...prevMap.get(p.id), ...p }));
+        });
+      }
     });
 
     // ─── Game lifecycle ─────────────────────────────────────────────
@@ -201,6 +212,35 @@ export function useDashboardSocket() {
   // Clear overlay manually (for result dismiss, etc.)
   const clearOverlay = useCallback(() => {
     setOverlay(null);
+  }, []);
+
+  // Fetch initial state via REST API so the dashboard has data immediately,
+  // without waiting for the socket connection + dashboard:join round-trip.
+  // This fixes the "0 en vie" / empty dashboard on first load.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/game/state')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (data.gameStatus) setGameStatus(data.gameStatus);
+        if (data.players) {
+          setPlayers(data.players);
+          setPlayerCount(data.players.length);
+        }
+        if (data.currentPhase) {
+          setCurrentPhase(data.currentPhase);
+          if (data.currentPhase.type === 'night') {
+            setOverlay('night');
+          } else if (data.currentPhase.type === 'village_council') {
+            setOverlay('council');
+          }
+        }
+      })
+      .catch(() => {
+        // Silently ignore — socket state:sync will fill in data
+      });
+    return () => { cancelled = true; };
   }, []);
 
   // Auto-connect on mount
