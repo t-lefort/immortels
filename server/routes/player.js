@@ -7,6 +7,10 @@ import {
   submitGhostIdentifications,
   getCurrentPhase,
 } from '../game-engine.js';
+import {
+  emitToAll,
+  computeVoteCounts,
+} from '../socket-rooms.js';
 
 const router = Router();
 
@@ -66,12 +70,13 @@ router.post('/join', (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
-  // Notify lobby update
+  // Notify lobby update to admin and dashboard
   const io = req.app.get('io');
   if (io) {
-    io.to('admin').emit('lobby:update', {
-      playerCount: db.prepare('SELECT COUNT(*) as count FROM players').get().count,
-    });
+    const players = db.prepare('SELECT id, name FROM players ORDER BY id').all();
+    const lobbyData = { playerCount: players.length, players };
+    io.to('admin').emit('lobby:update', lobbyData);
+    io.to('dashboard').emit('lobby:update', lobbyData);
   }
 
   res.status(201).json({
@@ -302,44 +307,23 @@ router.get('/wolves', requirePlayer, (req, res) => {
 
 /**
  * Emit a phase:vote_update event with current vote counts.
+ * Uses the shared computeVoteCounts helper from socket-rooms.
  * Counts combine wolf + villager_guess for night (shared counter),
  * or village for council.
  */
 function emitVoteUpdate(io, currentPhase) {
   if (!io || !currentPhase) return;
 
-  const db = getDb();
+  const { voteCount, totalExpected } = computeVoteCounts(currentPhase.id, currentPhase.type);
 
-  let voteCount = 0;
-  let totalExpected = 0;
-
-  if (currentPhase.type === 'night') {
-    // Combined wolf + villager_guess votes (alive players)
-    voteCount = db
-      .prepare(
-        "SELECT COUNT(DISTINCT voter_id) as count FROM votes WHERE phase_id = ? AND vote_type IN ('wolf', 'villager_guess')"
-      )
-      .get(currentPhase.id).count;
-    totalExpected = db
-      .prepare("SELECT COUNT(*) as count FROM players WHERE status = 'alive'")
-      .get().count;
-  } else {
-    // Village council votes
-    voteCount = db
-      .prepare(
-        "SELECT COUNT(*) as count FROM votes WHERE phase_id = ? AND vote_type = 'village'"
-      )
-      .get(currentPhase.id).count;
-    totalExpected = db
-      .prepare("SELECT COUNT(*) as count FROM players WHERE status = 'alive'")
-      .get().count;
-  }
-
-  io.emit('phase:vote_update', {
+  const payload = {
     phaseId: currentPhase.id,
     voteCount,
     totalExpected,
-  });
+  };
+
+  // Broadcast to all clients (players, dashboard, admin)
+  emitToAll(io, 'phase:vote_update', payload);
 }
 
 export default router;

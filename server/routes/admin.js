@@ -23,6 +23,15 @@ import {
   computeFinalScores,
   getScoreboard,
 } from '../game-engine.js';
+import {
+  emitToPlayer,
+  emitToWolves,
+  emitToAll,
+  emitToAdmin,
+  emitToDashboard,
+  updatePlayerRooms,
+} from '../socket-rooms.js';
+import { resyncPlayer } from '../socket-handlers.js';
 
 const router = Router();
 
@@ -61,9 +70,10 @@ router.post('/players/bulk', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.to('admin').emit('lobby:update', {
-      playerCount: db.prepare('SELECT COUNT(*) as count FROM players').get().count,
-    });
+    const players = db.prepare('SELECT id, name FROM players ORDER BY id').all();
+    const lobbyData = { playerCount: players.length, players };
+    emitToAdmin(io, 'lobby:update', lobbyData);
+    emitToDashboard(io, 'lobby:update', lobbyData);
   }
 
   res.json({ created, skipped });
@@ -88,9 +98,10 @@ router.delete('/players/:id', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.to('admin').emit('lobby:update', {
-      playerCount: db.prepare('SELECT COUNT(*) as count FROM players').get().count,
-    });
+    const players = db.prepare('SELECT id, name FROM players ORDER BY id').all();
+    const lobbyData = { playerCount: players.length, players };
+    emitToAdmin(io, 'lobby:update', lobbyData);
+    emitToDashboard(io, 'lobby:update', lobbyData);
   }
 
   res.json({ deleted: true, id });
@@ -136,21 +147,23 @@ router.post('/game/start', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    // Notify all players the game started
-    io.emit('game:started');
-
-    // Send role to each player individually
+    // Send game:started to each player individually with their role
     const players = db.prepare('SELECT * FROM players').all();
     for (const player of players) {
-      io.to(`player:${player.id}`).emit('role:revealed', {
+      emitToPlayer(io, player.id, 'game:started', {
         role: player.role,
       });
     }
 
-    // Reveal wolves to each other after a short delay (after phase 1 per spec,
-    // but game:start is the natural moment)
+    // Reveal wolves to each other
     const wolves = db.prepare("SELECT id, name FROM players WHERE role = 'wolf'").all();
-    io.to('wolves').emit('wolves:revealed', { wolves });
+    emitToWolves(io, 'wolves:revealed', { wolves });
+
+    // Notify dashboard
+    emitToDashboard(io, 'game:started', {});
+
+    // Notify admin
+    emitToAdmin(io, 'game:started', {});
   }
 
   res.json({ status: 'in_progress', playerCount });
@@ -176,10 +189,70 @@ router.post('/phase/start', (req, res) => {
 
   try {
     const phase = startPhase(Number(phaseId));
+    const db = getDb();
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('phase:started', { phase });
+      // Build role-specific payloads for phase start
+      const alivePlayers = db.prepare("SELECT id, name, status FROM players WHERE status = 'alive'").all();
+      const aliveGhosts = db.prepare("SELECT id, name, status FROM players WHERE status = 'ghost'").all();
+
+      if (phase.type === 'night') {
+        // Wolves see list of alive non-wolf targets
+        const wolfTargets = db
+          .prepare("SELECT id, name FROM players WHERE status = 'alive' AND role != 'wolf'")
+          .all();
+        emitToWolves(io, 'phase:started', {
+          phase,
+          phaseType: 'night',
+          targets: wolfTargets,
+        });
+
+        // Alive villagers see villager guess targets (all alive players except themselves — handled client-side)
+        const allAlive = db
+          .prepare("SELECT id, name FROM players WHERE status = 'alive'")
+          .all();
+
+        // Send to each alive villager individually
+        const aliveVillagers = db
+          .prepare("SELECT id FROM players WHERE status = 'alive' AND role = 'villager'")
+          .all();
+        for (const v of aliveVillagers) {
+          emitToPlayer(io, v.id, 'phase:started', {
+            phase,
+            phaseType: 'night',
+            targets: allAlive.filter(p => p.id !== v.id),
+          });
+        }
+
+        // Ghosts see their options
+        const ghostPlayers = db
+          .prepare("SELECT id, role FROM players WHERE status = 'ghost'")
+          .all();
+        for (const ghost of ghostPlayers) {
+          const ghostTargets = db
+            .prepare("SELECT id, name FROM players WHERE status = 'alive'")
+            .all();
+          emitToPlayer(io, ghost.id, 'phase:started', {
+            phase,
+            phaseType: 'night',
+            targets: ghostTargets,
+            isGhost: true,
+            canIdentify: ghost.role === 'villager',
+          });
+        }
+      } else {
+        // Village council — all alive players vote, everyone sees the same
+        emitToAll(io, 'phase:started', {
+          phase,
+          phaseType: 'village_council',
+          targets: alivePlayers,
+        });
+      }
+
+      // Also send to dashboard and admin (non-role-specific)
+      emitToDashboard(io, 'phase:started', { phase, phaseType: phase.type });
+      emitToAdmin(io, 'phase:started', { phase, phaseType: phase.type });
     }
 
     res.json(phase);
@@ -199,7 +272,7 @@ router.post('/phase/open-voting', (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('phase:voting_opened', { phase });
+      emitToAll(io, 'phase:voting_opened', { phase, phaseId: phase.id });
     }
 
     res.json(phase);
@@ -219,7 +292,7 @@ router.post('/phase/close-voting', (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('phase:voting_closed', { phase });
+      emitToAll(io, 'phase:voting_closed', { phase, phaseId: phase.id });
     }
 
     res.json(phase);
@@ -265,6 +338,7 @@ router.post('/phase/reveal', (req, res) => {
     return res.status(404).json({ error: 'Phase introuvable' });
   }
 
+  const io = req.app.get('io');
   const eliminated = [];
 
   // Apply eliminations if provided
@@ -273,6 +347,11 @@ router.post('/phase/reveal', (req, res) => {
       try {
         const player = eliminatePlayer(victim.playerId, Number(phaseId), victim.eliminatedBy);
         eliminated.push(player);
+
+        // Update room membership: player becomes ghost
+        if (io) {
+          updatePlayerRooms(io, victim.playerId, 'ghost');
+        }
       } catch (err) {
         // Skip errors (e.g., already eliminated)
         console.warn(`[ADMIN] Could not eliminate player ${victim.playerId}: ${err.message}`);
@@ -293,17 +372,63 @@ router.post('/phase/reveal', (req, res) => {
     console.warn(`[ADMIN] Could not compute phase scores: ${err.message}`);
   }
 
-  const io = req.app.get('io');
   if (io) {
-    io.emit('phase:result', {
+    const eliminatedData = eliminated.map(p => ({
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      eliminatedBy: p.eliminated_by,
+    }));
+
+    // Broadcast phase result to all
+    emitToAll(io, 'phase:result', {
       phase,
-      eliminated: eliminated.map(p => ({
-        id: p.id,
-        name: p.name,
-        role: p.role,
-        eliminatedBy: p.eliminated_by,
-      })),
+      eliminated: eliminatedData,
+      noVictim: eliminatedData.length === 0,
     });
+
+    // Send player:eliminated to each eliminated player specifically
+    for (const p of eliminated) {
+      emitToPlayer(io, p.id, 'player:eliminated', {
+        playerId: p.id,
+      });
+    }
+
+    // Check if hunter was eliminated — trigger hunter power
+    for (const p of eliminated) {
+      if (p.special_role === 'chasseur') {
+        setSetting('hunter_pending', '1');
+        emitToPlayer(io, p.id, 'special:prompt', {
+          power: 'chasseur',
+          playerId: p.id,
+          playerName: p.name,
+        });
+        emitToAdmin(io, 'special:prompt', {
+          power: 'chasseur',
+          playerId: p.id,
+          playerName: p.name,
+        });
+      }
+    }
+
+    // Check if mayor was eliminated — trigger succession
+    const mayorIdStr = getSetting('mayor_id');
+    if (mayorIdStr) {
+      const mayorId = Number(mayorIdStr);
+      const eliminatedMayor = eliminated.find(p => p.id === mayorId);
+      if (eliminatedMayor) {
+        emitToPlayer(io, mayorId, 'special:prompt', {
+          power: 'mayor_succession',
+          playerId: mayorId,
+          playerName: eliminatedMayor.name,
+        });
+        emitToAdmin(io, 'special:prompt', {
+          power: 'mayor_succession',
+          playerId: mayorId,
+          playerName: eliminatedMayor.name,
+        });
+      }
+    }
   }
 
   // Clear current phase
@@ -362,7 +487,7 @@ router.post('/phase/speech-order', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.emit('speech:order', { order });
+    emitToAll(io, 'speech:order', { order });
   }
 
   res.json({ order });
@@ -374,9 +499,22 @@ router.post('/timer/start', (req, res) => {
     return res.status(400).json({ error: 'duration (secondes) requis' });
   }
 
+  // Persist timer state to DB so reconnecting clients can recover it
+  setSetting('timer_duration', String(duration));
+  setSetting('timer_started_at', String(Date.now()));
+
   const io = req.app.get('io');
   if (io) {
-    io.emit('timer:start', { duration });
+    // Send to dashboard and all players (not just admin)
+    emitToDashboard(io, 'timer:start', { duration });
+    // Also broadcast to all players
+    const db = getDb();
+    const players = db.prepare('SELECT id FROM players').all();
+    for (const p of players) {
+      emitToPlayer(io, p.id, 'timer:start', { duration });
+    }
+    // Also notify admin
+    emitToAdmin(io, 'timer:start', { duration });
   }
 
   res.json({ started: true, duration });
@@ -398,7 +536,7 @@ router.post('/special/trigger', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.to(`player:${player.id}`).emit('special:prompt', {
+    emitToPlayer(io, player.id, 'special:prompt', {
       power,
       playerId: player.id,
       playerName: player.name,
@@ -415,21 +553,52 @@ router.post('/special/force', (req, res) => {
   }
 
   const db = getDb();
+  const io = req.app.get('io');
 
   try {
     switch (power) {
       case 'protecteur': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
         protectPlayer(Number(targetId));
+
+        if (io && playerId) {
+          emitToPlayer(io, playerId, 'special:result', {
+            power: 'protecteur',
+            targetId: Number(targetId),
+          });
+        }
+
         res.json({ applied: true, power, targetId });
         break;
       }
       case 'sorciere': {
         if (decision === 'resurrect' && targetId) {
           const player = resurrectPlayer(Number(targetId));
+
+          // Update room membership: player is alive again
+          if (io) {
+            updatePlayerRooms(io, Number(targetId), 'alive');
+          }
+
+          if (io && playerId) {
+            emitToPlayer(io, playerId, 'special:result', {
+              power: 'sorciere',
+              action: 'resurrect',
+              target: { id: player.id, name: player.name },
+            });
+          }
+
           res.json({ applied: true, power, action: 'resurrect', player });
         } else {
           setSetting('witch_used', '1');
+
+          if (io && playerId) {
+            emitToPlayer(io, playerId, 'special:result', {
+              power: 'sorciere',
+              action: 'skip',
+            });
+          }
+
           res.json({ applied: true, power, action: 'skip' });
         }
         break;
@@ -445,9 +614,8 @@ router.post('/special/force', (req, res) => {
         }
 
         // Send result to voyante
-        const io2 = req.app.get('io');
-        if (io2 && playerId) {
-          io2.to(`player:${playerId}`).emit('special:result', {
+        if (io && playerId) {
+          emitToPlayer(io, playerId, 'special:result', {
             power: 'voyante',
             target: { id: target.id, name: target.name, role: target.role },
           });
@@ -464,12 +632,28 @@ router.post('/special/force', (req, res) => {
 
         setSetting('hunter_pending', '0');
 
-        const io3 = req.app.get('io');
-        if (io3) {
-          io3.emit('player:eliminated', {
+        // Update room membership: victim becomes ghost
+        if (io) {
+          updatePlayerRooms(io, Number(targetId), 'ghost');
+
+          // Broadcast elimination to all
+          emitToAll(io, 'player:eliminated', {
             player: { id: victim.id, name: victim.name, role: victim.role },
             eliminatedBy: 'chasseur',
           });
+
+          // Notify the specific victim
+          emitToPlayer(io, victim.id, 'player:eliminated', {
+            playerId: victim.id,
+          });
+
+          // Send result to hunter
+          if (playerId) {
+            emitToPlayer(io, playerId, 'special:result', {
+              power: 'chasseur',
+              victim: { id: victim.id, name: victim.name },
+            });
+          }
         }
 
         res.json({ applied: true, power, victim });
@@ -478,6 +662,14 @@ router.post('/special/force', (req, res) => {
       case 'mayor_succession': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
         setSetting('mayor_id', String(targetId));
+
+        if (io && playerId) {
+          emitToPlayer(io, playerId, 'special:result', {
+            power: 'mayor_succession',
+            newMayorId: Number(targetId),
+          });
+        }
+
         res.json({ applied: true, power, newMayorId: Number(targetId) });
         break;
       }
@@ -548,7 +740,7 @@ router.post('/challenge/assign', (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.to(`player:${playerId}`).emit('player:role_assigned', {
+    emitToPlayer(io, playerId, 'player:role_assigned', {
       specialRole: challenge.special_role_awarded,
     });
   }
@@ -590,6 +782,18 @@ router.put('/player/:id', (req, res) => {
   db.prepare(`UPDATE players SET ${setClauses} WHERE id = ?`).run(...values, id);
 
   const updated = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
+
+  // If status changed, update room memberships
+  const io = req.app.get('io');
+  if (io && updates.status && updates.status !== player.status) {
+    updatePlayerRooms(io, id, updates.status);
+  }
+
+  // Re-sync the affected player
+  if (io) {
+    resyncPlayer(io, id);
+  }
+
   res.json(updated);
 });
 
@@ -610,10 +814,17 @@ router.post('/phase/undo', (req, res) => {
 
   // Restore victims from this phase
   const victims = db.prepare('SELECT * FROM phase_victims WHERE phase_id = ?').all(Number(phaseId));
+  const io = req.app.get('io');
+
   for (const victim of victims) {
     db.prepare(
       "UPDATE players SET status = 'alive', eliminated_at_phase = NULL, eliminated_by = NULL WHERE id = ?"
     ).run(victim.player_id);
+
+    // Update room memberships: player is alive again
+    if (io) {
+      updatePlayerRooms(io, victim.player_id, 'alive');
+    }
   }
   db.prepare('DELETE FROM phase_victims WHERE phase_id = ?').run(Number(phaseId));
 
@@ -636,9 +847,13 @@ router.put('/settings', (req, res) => {
 router.post('/game/reset', (req, res) => {
   resetGame();
 
+  // Clear timer settings
+  setSetting('timer_duration', null);
+  setSetting('timer_started_at', null);
+
   const io = req.app.get('io');
   if (io) {
-    io.emit('game:reset');
+    emitToAll(io, 'game:reset', {});
   }
 
   res.json({ reset: true });
@@ -684,12 +899,19 @@ router.post('/game/end', (req, res) => {
     console.warn(`[ADMIN] Could not compute final scores: ${err.message}`);
   }
 
+  const scoreboard = getScoreboard();
+
   const io = req.app.get('io');
   if (io) {
-    io.emit('game:end', { scoreboard: getScoreboard() });
+    // Determine winner
+    const db = getDb();
+    const aliveWolves = db.prepare("SELECT COUNT(*) as count FROM players WHERE role = 'wolf' AND status = 'alive'").get().count;
+    const winner = aliveWolves > 0 ? 'wolves' : 'villagers';
+
+    emitToAll(io, 'game:end', { scoreboard, winner });
   }
 
-  res.json({ status: 'finished', scoreChanges, scoreboard: getScoreboard() });
+  res.json({ status: 'finished', scoreChanges, scoreboard });
 });
 
 export default router;

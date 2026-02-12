@@ -4,9 +4,12 @@ import { io } from 'socket.io-client';
 /**
  * Socket.IO hook for the player interface.
  * Connects with the player's session token and listens to game events.
+ * Handles reconnection: on reconnect, re-emits player:join to get
+ * a fresh state:sync from the server (all state rebuilt from SQLite).
  */
 export function usePlayerSocket() {
   const socketRef = useRef(null);
+  const sessionTokenRef = useRef(null);
   const [connected, setConnected] = useState(false);
   const [gameState, setGameState] = useState(null);
   const listenersRef = useRef({});
@@ -15,13 +18,16 @@ export function usePlayerSocket() {
     if (socketRef.current?.connected) return;
     if (!sessionToken) return;
 
+    sessionTokenRef.current = sessionToken;
+
     const socket = io({
       transports: ['websocket', 'polling'],
     });
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('player:join', { sessionToken });
+      // On every (re)connect, identify as this player
+      socket.emit('player:join', { sessionToken: sessionTokenRef.current });
     });
 
     socket.on('disconnect', () => {
@@ -45,7 +51,8 @@ export function usePlayerSocket() {
       'timer:start',
       'special:prompt',
       'special:result',
-      'role:revealed',
+      'speech:order',
+      'lobby:update',
     ];
 
     for (const event of events) {
@@ -72,6 +79,7 @@ export function usePlayerSocket() {
       socketRef.current = null;
       setConnected(false);
       setGameState(null);
+      sessionTokenRef.current = null;
     }
   }, []);
 

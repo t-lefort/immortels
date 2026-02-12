@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
+/**
+ * Socket.IO hook for the admin interface.
+ * Connects with the admin password and listens to all game events.
+ * Handles reconnection: on reconnect, re-emits admin:join to get
+ * a fresh state:sync from the server (all state rebuilt from SQLite).
+ */
 export function useAdminSocket() {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
@@ -19,7 +25,11 @@ export function useAdminSocket() {
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('admin:join', { password });
+      // On every (re)connect, identify as admin
+      const pwd = localStorage.getItem('admin_password');
+      if (pwd) {
+        socket.emit('admin:join', { password: pwd });
+      }
     });
 
     socket.on('disconnect', () => {

@@ -215,8 +215,13 @@ export function PlayerProvider({ children }) {
         if (data.totalExpected !== undefined) setTotalExpected(data.totalExpected);
       }),
 
-      on('game:started', () => {
+      on('game:started', (data) => {
         setGameStatus('in_progress');
+        // Server now sends role in game:started payload
+        if (data && data.role) {
+          setRoleRevealed(data.role);
+          setPlayer((prev) => prev ? { ...prev, role: data.role } : prev);
+        }
       }),
 
       on('game:end', (data) => {

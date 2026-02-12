@@ -5,6 +5,8 @@ import { io } from 'socket.io-client';
  * Socket.IO hook for the dashboard display.
  * Connects and joins the 'dashboard' room. Listens to all game events
  * and maintains reactive state for the projected display.
+ * Handles reconnection: on reconnect, re-emits dashboard:join to get
+ * a fresh state:sync from the server (all state rebuilt from SQLite).
  */
 export function useDashboardSocket() {
   const socketRef = useRef(null);
@@ -38,6 +40,7 @@ export function useDashboardSocket() {
 
     socket.on('connect', () => {
       setConnected(true);
+      // On every (re)connect, identify as dashboard
       socket.emit('dashboard:join');
     });
 
@@ -49,6 +52,7 @@ export function useDashboardSocket() {
     socket.on('state:sync', (data) => {
       if (data.gameStatus) setGameStatus(data.gameStatus);
       if (data.players) setPlayers(data.players);
+      if (data.playerCount !== undefined) setPlayerCount(data.playerCount);
       if (data.currentPhase) {
         setCurrentPhase(data.currentPhase);
         // Set overlay based on current phase
@@ -60,6 +64,14 @@ export function useDashboardSocket() {
       }
       if (data.voteCount !== undefined && data.totalExpected !== undefined) {
         setVoteProgress({ count: data.voteCount, total: data.totalExpected });
+      }
+      // Recover timer state on reconnect
+      if (data.timerState && data.timerState.remaining > 0) {
+        setTimer({
+          duration: data.timerState.duration,
+          remaining: data.timerState.remaining,
+          startedAt: Date.now(),
+        });
       }
     });
 
