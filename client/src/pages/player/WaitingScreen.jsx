@@ -1,10 +1,34 @@
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import CountdownTimer from '../../components/CountdownTimer.jsx';
 
+// Map special_role keys to French display labels (excluding maire)
+const SPECIAL_ROLE_LABELS = {
+  sorciere: 'Sorciere',
+  protecteur: 'Protecteur',
+  voyante: 'Voyante',
+  chasseur: 'Chasseur',
+  immunite: 'Immunite',
+};
+
+/**
+ * Format a ghost player's former role for display.
+ * e.g. "Fantome (Villageois)" or "Fantome (Loup, Voyante)"
+ */
+function formatGhostLabel(player) {
+  if (!player.role) return 'Fantome';
+  const roleName = player.role === 'wolf' ? 'Loup' : 'Villageois';
+  const specialLabel =
+    player.special_role && player.special_role !== 'maire'
+      ? SPECIAL_ROLE_LABELS[player.special_role]
+      : null;
+  const parts = specialLabel ? `${roleName}, ${specialLabel}` : roleName;
+  return `Fantome (${parts})`;
+}
+
 /**
  * Between-phases waiting screen.
  * Shows player status, list of eliminated players.
- * Role is NOT shown here.
+ * Former role is shown for ghost (eliminated) players only.
  */
 export default function WaitingScreen() {
   const { player, players, eliminated, timerDuration, setTimerDuration, connected } = usePlayer();
@@ -77,7 +101,7 @@ export default function WaitingScreen() {
                            rounded-lg px-4 py-3"
               >
                 <span className="text-gray-400">{p.name}</span>
-                <span className="text-ghost/60 text-xs">Fantôme</span>
+                <span className="text-ghost/60 text-xs">{formatGhostLabel(p)}</span>
               </div>
             ))}
           </div>

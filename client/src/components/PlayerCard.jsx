@@ -1,3 +1,27 @@
+// Map special_role keys to French display labels (excluding maire)
+const SPECIAL_ROLE_LABELS = {
+  sorciere: 'Sorciere',
+  protecteur: 'Protecteur',
+  voyante: 'Voyante',
+  chasseur: 'Chasseur',
+  immunite: 'Immunite',
+};
+
+/**
+ * Format a ghost player's badge label with their former role.
+ * e.g. "Fantome (Villageois)" or "Fantome (Loup, Voyante)"
+ */
+function formatGhostLabel(player) {
+  if (!player.role) return 'Fantome';
+  const roleName = player.role === 'wolf' ? 'Loup' : 'Villageois';
+  const specialLabel =
+    player.special_role && player.special_role !== 'maire'
+      ? SPECIAL_ROLE_LABELS[player.special_role]
+      : null;
+  const parts = specialLabel ? `${roleName}, ${specialLabel}` : roleName;
+  return `Fantome (${parts})`;
+}
+
 /**
  * Reusable player display card.
  * Shows name, status indicator, selectable state for voting.
@@ -73,7 +97,7 @@ export default function PlayerCard({
           )}
           {showStatus && isGhost && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-ghost/20 text-green-400 border border-ghost/40">
-              Fantôme
+              {formatGhostLabel(player)}
             </span>
           )}
           {showStatus && !isGhost && (

@@ -128,10 +128,16 @@ function sendPlayerStateSync(socket, player) {
     }
   }
 
-  // Public player list (no tokens, no roles revealed)
+  // Public player list (no tokens; roles only revealed for ghost/eliminated players)
   const players = db
-    .prepare('SELECT id, name, status FROM players ORDER BY id')
-    .all();
+    .prepare('SELECT id, name, status, role, special_role FROM players ORDER BY id')
+    .all()
+    .map(p => {
+      if (p.status === 'ghost') {
+        return { id: p.id, name: p.name, status: p.status, role: p.role, special_role: p.special_role };
+      }
+      return { id: p.id, name: p.name, status: p.status };
+    });
 
   // Vote counts for current phase
   let voteCount = 0;
