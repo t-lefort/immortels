@@ -39,6 +39,13 @@ export function PlayerProvider({ children }) {
   // Track session token for socket reconnection
   const sessionTokenRef = useRef(null);
 
+  // Stable boolean to gate socket listener registration without
+  // re-running the effect on every player state change.
+  // We derive this from player?.id so listeners are registered once
+  // on login and torn down on logout, but NOT re-registered on every
+  // setPlayer() call (which would cause event listener churn and lost events).
+  const playerLoggedIn = !!player?.id;
+
   const { connected, on, connect, disconnect } = usePlayerSocket();
 
   // ─── Actions ──────────────────────────────────────────────────────────────
@@ -183,9 +190,17 @@ export function PlayerProvider({ children }) {
   // ─── Auto-reconnect on page reload ────────────────────────────────────────
 
   useEffect(() => {
+    // `ignore` flag prevents stale async completions from executing after
+    // the effect cleanup runs.  This is critical for React StrictMode which
+    // mounts → unmounts → mounts, causing the first mount's async work to
+    // complete after the second mount has already started.
+    let ignore = false;
+
     async function tryReconnect() {
       try {
         const me = await playerApi.getMe();
+        if (ignore) return;
+
         setPlayer(me);
         setGameStatus(me.gameStatus || 'setup');
         setCurrentPhase(me.currentPhase || null);
@@ -203,12 +218,13 @@ export function PlayerProvider({ children }) {
         if (me.role === 'wolf' && me.gameStatus !== 'setup') {
           try {
             const wolvesData = await playerApi.getWolves();
-            setWolves(wolvesData.wolves);
+            if (!ignore) setWolves(wolvesData.wolves);
           } catch {
             // ignore
           }
         }
       } catch (err) {
+        if (ignore) return;
         // No valid session — player needs to login
         setPlayer(null);
         // Only set error for network issues, not for 401s (which just means no session)
@@ -216,17 +232,21 @@ export function PlayerProvider({ children }) {
           setError('Impossible de se connecter au serveur. Vérifiez votre connexion.');
         }
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
 
     tryReconnect();
+
+    return () => {
+      ignore = true;
+    };
   }, [connect]);
 
   // ─── Socket event listeners ───────────────────────────────────────────────
 
   useEffect(() => {
-    if (!player) return;
+    if (!playerLoggedIn) return;
 
     const unsubs = [
       // On socket reconnection, re-fetch full state via HTTP
@@ -259,7 +279,8 @@ export function PlayerProvider({ children }) {
         if (data.player) {
           setPlayer((prev) => ({ ...prev, ...data.player }));
         }
-        if (data.hasVoted !== undefined) setHasVoted(data.hasVoted ? { voted: true } : {});
+        // hasVoted is an object like { wolf: true } or { villager_guess: true } — preserve it as-is
+        if (data.hasVoted !== undefined) setHasVoted(data.hasVoted || {});
         if (data.voteCount !== undefined) setVoteCount(data.voteCount);
         if (data.totalExpected !== undefined) setTotalExpected(data.totalExpected);
         // Clear any previous errors on successful sync
@@ -382,7 +403,8 @@ export function PlayerProvider({ children }) {
     ];
 
     return () => unsubs.forEach((fn) => fn());
-  }, [player, on, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerLoggedIn, on, disconnect]);
 
   // ─── Context value ────────────────────────────────────────────────────────
 
