@@ -1,0 +1,11 @@
+{
+  "name": "Les Immortels",
+  "short_name": "Immortels",
+  "description": "Jeu du Loup-Garou",
+  "start_url": "/play",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "orientation": "portrait",
+  "icons": []
+}

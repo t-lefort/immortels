@@ -23,7 +23,7 @@ export default function SettingsTab({ refreshPlayers }) {
     try {
       const data = await api.updateSettings(settings);
       setSettings(data);
-      setMessage({ type: 'success', text: 'Réglages sauvegardés' });
+      setMessage({ type: 'success', text: 'Reglages sauvegardes' });
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     }
@@ -31,15 +31,15 @@ export default function SettingsTab({ refreshPlayers }) {
   }
 
   async function handleReset() {
-    if (!confirm('Réinitialiser TOUTE la partie ? Joueurs, phases, votes — tout sera supprimé.')) return;
-    if (!confirm('Êtes-vous vraiment sûr ?')) return;
+    if (!confirm('Etes-vous sur ? Toutes les donnees seront supprimees.')) return;
+    if (!confirm('Confirmation finale : reinitialiser TOUTE la partie ? Joueurs, phases, votes, scores — tout sera supprime definitivement.')) return;
 
     setLoading(true);
     try {
       await api.resetGame();
       refreshPlayers();
       loadSettings();
-      setMessage({ type: 'success', text: 'Partie réinitialisée' });
+      setMessage({ type: 'success', text: 'Partie reinitialisee' });
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     }
@@ -50,19 +50,20 @@ export default function SettingsTab({ refreshPlayers }) {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
-  const settingRows = [
+  const gameSettingRows = [
     { key: 'game_status', label: 'Statut de la partie', type: 'select', options: ['setup', 'in_progress', 'finished'] },
     { key: 'admin_password', label: 'Mot de passe admin', type: 'text' },
-    { key: 'num_wolves', label: 'Nombre de loups', type: 'number' },
     { key: 'current_phase_id', label: 'Phase courante (ID)', type: 'text' },
     { key: 'moonless_night', label: 'Nuit sans lune', type: 'toggle' },
-    { key: 'protected_player_id', label: 'Joueur protégé (ID)', type: 'text' },
-    { key: 'last_protected_player_id', label: 'Dernier protégé (ID)', type: 'text' },
-    { key: 'witch_used', label: 'Sorcière utilisée', type: 'toggle' },
+    { key: 'protected_player_id', label: 'Joueur protege (ID)', type: 'text' },
+    { key: 'last_protected_player_id', label: 'Dernier protege (ID)', type: 'text' },
+    { key: 'witch_used', label: 'Sorciere utilisee', type: 'toggle' },
     { key: 'seer_uses_remaining', label: 'Utilisations voyante restantes', type: 'number' },
     { key: 'mayor_id', label: 'Maire (ID)', type: 'text' },
     { key: 'hunter_pending', label: 'Chasseur en attente', type: 'toggle' },
   ];
+
+  const isSetup = settings.game_status === 'setup';
 
   return (
     <div className="space-y-4">
@@ -76,11 +77,63 @@ export default function SettingsTab({ refreshPlayers }) {
         </div>
       )}
 
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <h2 className="text-lg font-semibold mb-4">Réglages de la partie</h2>
+      {/* Test Mode Section */}
+      <div className="bg-yellow-950/30 rounded-lg p-4 border border-yellow-900/50">
+        <h2 className="text-lg font-semibold text-yellow-400 mb-3">Mode test</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Active les raccourcis de test (skip de phases, nombre de joueurs/loups variable).
+        </p>
 
         <div className="space-y-3">
-          {settingRows.map(row => (
+          {/* Test mode toggle */}
+          <div className="flex items-center justify-between gap-4">
+            <label className="text-sm text-gray-400 flex-shrink-0">Mode test</label>
+            <button
+              onClick={() => updateSetting('test_mode', settings.test_mode === '1' ? '0' : '1')}
+              className={`w-12 h-6 rounded-full transition-colors relative ${
+                settings.test_mode === '1' ? 'bg-yellow-600' : 'bg-gray-700'
+              }`}
+            >
+              <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all ${
+                settings.test_mode === '1' ? 'left-6' : 'left-0.5'
+              }`} />
+            </button>
+          </div>
+
+          {/* Number of wolves */}
+          <div className="flex items-center justify-between gap-4">
+            <label className="text-sm text-gray-400 flex-shrink-0">Nombre de loups</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                value={settings.num_wolves ?? '8'}
+                onChange={(e) => updateSetting('num_wolves', e.target.value)}
+                className="w-24 px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none"
+                disabled={!isSetup}
+              />
+              {!isSetup && (
+                <span className="text-xs text-gray-500">(avant demarrage uniquement)</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {settings.test_mode === '1' && (
+          <div className="mt-3 px-3 py-2 bg-yellow-900/30 rounded border border-yellow-800/50">
+            <p className="text-xs text-yellow-300">
+              Mode test actif — Les raccourcis admin sont disponibles (skip phase, reset rapide).
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Game Settings */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <h2 className="text-lg font-semibold mb-4">Reglages de la partie</h2>
+
+        <div className="space-y-3">
+          {gameSettingRows.map(row => (
             <div key={row.key} className="flex items-center justify-between gap-4">
               <label className="text-sm text-gray-400 flex-shrink-0">{row.label}</label>
 
@@ -141,18 +194,18 @@ export default function SettingsTab({ refreshPlayers }) {
         </div>
       </div>
 
-      {/* Reset */}
+      {/* Danger Zone — Reset */}
       <div className="bg-red-950/30 rounded-lg p-4 border border-red-900/50">
         <h2 className="text-lg font-semibold text-red-400 mb-2">Zone dangereuse</h2>
         <p className="text-sm text-gray-400 mb-3">
-          Réinitialiser supprime tous les joueurs, phases, votes et scores.
+          Reinitialiser supprime tous les joueurs, phases, votes et scores. Cette action est irreversible.
         </p>
         <button
           onClick={handleReset}
           disabled={loading}
           className="px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
         >
-          Réinitialiser la partie
+          Reset complet
         </button>
       </div>
     </div>

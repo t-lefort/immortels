@@ -1,4 +1,5 @@
 import { getDb, getSetting, setSetting } from './db.js';
+import logger from './logger.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,10 @@ export function assignRoles(numWolves) {
     }
   })();
 
-  return db.prepare('SELECT id, name, role FROM players ORDER BY id').all();
+  const result = db.prepare('SELECT id, name, role FROM players ORDER BY id').all();
+  const wolves = result.filter(p => p.role === 'wolf');
+  logger.game('Roles assigned', { totalPlayers: result.length, numWolves: wolves.length });
+  return result;
 }
 
 // ─── Phase Management ───────────────────────────────────────────────────────
@@ -462,7 +466,9 @@ export function eliminatePlayer(playerId, phaseId, eliminatedBy) {
     ).run(phaseId, playerId, eliminatedBy);
   })();
 
-  return db.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
+  const eliminated = db.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
+  logger.game('Player eliminated', { playerId, playerName: eliminated.name, eliminatedBy, phaseId });
+  return eliminated;
 }
 
 /**

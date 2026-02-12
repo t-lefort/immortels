@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, getSetting } from '../db.js';
 import { requirePlayer } from '../middleware/session.js';
+import logger from '../logger.js';
 import {
   submitVote,
   submitGhostIdentifications,
@@ -59,6 +60,7 @@ router.post('/join', (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    logger.auth('Player reconnected', { playerId: existing.id, name: existing.name });
     return res.json({
       id: existing.id,
       name: existing.name,
@@ -95,6 +97,7 @@ router.post('/join', (req, res) => {
     io.to('dashboard').emit('lobby:update', lobbyData);
   }
 
+  logger.auth('New player joined', { playerId: result.lastInsertRowid, name: cleanName });
   res.status(201).json({
     id: result.lastInsertRowid,
     name: cleanName,
@@ -225,6 +228,7 @@ router.post('/vote', requirePlayer, (req, res) => {
 
   try {
     const vote = submitVote(currentPhase.id, player.id, Number(targetId), voteType);
+    logger.vote('Vote submitted', { phaseId: currentPhase.id, voterId: player.id, voterName: player.name, targetId: Number(targetId), voteType, updated: !!vote.updated });
 
     // Emit vote update with counts
     emitVoteUpdate(req.app.get('io'), currentPhase);
@@ -283,6 +287,7 @@ router.post('/villager-guess', requirePlayer, (req, res) => {
 
   try {
     const vote = submitVote(currentPhase.id, player.id, Number(targetId), 'villager_guess');
+    logger.vote('Villager guess submitted', { phaseId: currentPhase.id, voterId: player.id, voterName: player.name, targetId: Number(targetId) });
 
     // Emit vote update with counts
     emitVoteUpdate(req.app.get('io'), currentPhase);

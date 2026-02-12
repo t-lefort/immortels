@@ -11,6 +11,7 @@ import {
   emitToAll,
   updatePlayerRooms,
 } from './socket-rooms.js';
+import logger from './logger.js';
 
 // ─── Maire (Mayor) ──────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export function handleMayorSuccession(io, eliminatedPlayerId) {
     targets: alivePlayers,
   });
 
+  logger.special('Mayor succession triggered', { mayorId: player.id });
   return { triggered: true, mayorId: player.id, targets: alivePlayers };
 }
 
@@ -77,6 +79,7 @@ export function processMayorSuccession(io, newMayorId) {
 
   setSetting('mayor_id', String(newMayorId));
   setSetting('mayor_succession_pending', '0');
+  logger.special('Mayor succession completed', { newMayorId: Number(newMayorId), newMayorName: newMayor.name });
 
   // Notify admin of result
   emitToAdmin(io, 'special:result', {
@@ -154,6 +157,7 @@ export function handleSorciere(io, phaseId, victimId) {
     status: 'waiting',
   });
 
+  logger.special('Sorciere prompted', { witchId: witch.id, victimId: victim.id });
   return { triggered: true, witchId: witch.id, victimId: victim.id };
 }
 
@@ -190,6 +194,7 @@ export function processSorciereResponse(io, resurrect, victimId) {
       target: { id: victim.id, name: victim.name },
     });
 
+    logger.special('Sorciere resurrected', { victimId: victim.id, victimName: victim.name });
     return { action: 'resurrect', victim };
   } else {
     // Witch chose not to resurrect — mark power as used anyway? No.
@@ -214,6 +219,7 @@ export function processSorciereResponse(io, resurrect, victimId) {
       action: 'skip',
     });
 
+    logger.special('Sorciere declined', {});
     return { action: 'skip' };
   }
 }
@@ -265,6 +271,7 @@ export function handleProtecteur(io, phaseId) {
     status: 'waiting',
   });
 
+  logger.special('Protecteur prompted', { protectorId: protector.id });
   return { triggered: true, protectorId: protector.id, targets };
 }
 
@@ -294,6 +301,7 @@ export function processProtecteurResponse(io, targetId) {
   setSetting('protecteur_pending', '0');
 
   const target = db.prepare('SELECT id, name FROM players WHERE id = ?').get(Number(targetId));
+  logger.special('Protecteur chose target', { targetId: Number(targetId), targetName: target?.name });
 
   if (protector) {
     emitToPlayer(io, protector.id, 'special:result', {
@@ -365,6 +373,7 @@ export function handleVoyante(io, phaseId) {
     status: 'waiting',
   });
 
+  logger.special('Voyante prompted', { seerId: seer.id, usesRemaining: remaining });
   return { triggered: true, seerId: seer.id, targets, usesRemaining: remaining };
 }
 
@@ -396,6 +405,8 @@ export function processVoyanteResponse(io, targetId) {
     },
     usesRemaining: Math.max(0, remaining - 1),
   };
+
+  logger.special('Voyante revealed role', { targetId: target.id, targetName: target.name, targetRole: target.role, usesRemaining: Math.max(0, remaining - 1) });
 
   if (seer) {
     emitToPlayer(io, seer.id, 'special:result', result);
@@ -439,6 +450,7 @@ export function handleChasseur(io, hunterId) {
     status: 'waiting',
   });
 
+  logger.special('Chasseur prompted', { hunterId: hunter.id });
   return { triggered: true, hunterId: hunter.id, targets: alivePlayers };
 }
 
@@ -471,6 +483,7 @@ export function processChasseurResponse(io, targetId, phaseId) {
 
   // Eliminate the target
   const victim = eliminatePlayer(Number(targetId), effectivePhaseId, 'chasseur');
+  logger.special('Chasseur killed target', { targetId: Number(targetId), targetName: victim.name, targetRole: victim.role, hunterId });
 
   setSetting('hunter_pending', '0');
   setSetting('hunter_player_id', null);
@@ -516,7 +529,7 @@ export function processChasseurResponse(io, targetId, phaseId) {
   if (target.special_role === 'chasseur') {
     hunterChainDepth++;
     if (hunterChainDepth > MAX_HUNTER_CHAIN_DEPTH) {
-      console.warn(`[HUNTER] Chain reaction depth limit reached (${MAX_HUNTER_CHAIN_DEPTH}). Stopping chain.`);
+      logger.special('Hunter chain depth limit reached', { depth: MAX_HUNTER_CHAIN_DEPTH });
       hunterChainDepth = 0;
       emitToAdmin(io, 'special:result', {
         power: 'chasseur',
@@ -561,6 +574,7 @@ export function handleImmunite(phaseId, playerId) {
   // Remove immunity after use
   db.prepare("UPDATE players SET special_role = NULL WHERE id = ?").run(Number(playerId));
 
+  logger.special('Immunity used', { playerId: Number(playerId), playerName: player.name });
   return { applied: true, playerName: player.name };
 }
 

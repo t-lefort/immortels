@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { usePlayerSocket } from '../hooks/usePlayerSocket.js';
 import * as playerApi from '../services/playerApi.js';
+import { useToast } from './ToastContext.jsx';
 
 const PlayerContext = createContext(null);
 
@@ -13,6 +14,8 @@ export function usePlayer() {
 }
 
 export function PlayerProvider({ children }) {
+  const toast = useToast();
+
   // Core player data
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -117,34 +120,40 @@ export function PlayerProvider({ children }) {
     try {
       const result = await playerApi.submitVote(targetId);
       setHasVoted((prev) => ({ ...prev, [result.voteType]: true }));
+      toast.success('Vote enregistre');
       return result;
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
       throw err;
     }
-  }, []);
+  }, [toast]);
 
   const villagerGuess = useCallback(async (targetId) => {
     try {
       const result = await playerApi.submitVillagerGuess(targetId);
       setHasVoted((prev) => ({ ...prev, villager_guess: true }));
+      toast.success('Vote enregistre');
       return result;
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
       throw err;
     }
-  }, []);
+  }, [toast]);
 
   const ghostIdentify = useCallback(async (targetIds) => {
     try {
       const result = await playerApi.submitGhostIdentification(targetIds);
       setHasVoted((prev) => ({ ...prev, ghost_identify: true }));
+      toast.success('Identification enregistree');
       return result;
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
       throw err;
     }
-  }, []);
+  }, [toast]);
 
   const submitSpecialResponse = useCallback(async (type, response) => {
     try {
@@ -229,6 +238,7 @@ export function PlayerProvider({ children }) {
           setCurrentPhase(me.currentPhase || null);
           setHasVoted(me.hasVoted || {});
           setError(null);
+          toast.info('Connexion retablie');
         } catch (err) {
           // Session expired — redirect to login
           if (err.message && (err.message.includes('401') || err.message.includes('Session invalide'))) {

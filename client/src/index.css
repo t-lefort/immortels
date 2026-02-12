@@ -7,6 +7,53 @@
   --color-ghost: #2d6a4f;
 }
 
+/* ─── Safari iOS Fixes ─────────────────────────────────────────────────── */
+
+/* Fix 100vh issue on iOS Safari — use dynamic viewport height */
+html, body, #root {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
+/* Remove tap highlight on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets for fixed bottom elements */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Touch action fixes for vote buttons — prevent double-tap zoom */
+button, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ─── Toast / Transition Animations ────────────────────────────────────── */
+
+/* slideDown — for toast notifications entering from top */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out forwards;
+}
+
 /* ─── Dashboard Animations ──────────────────────────────────────────────── */
 
 /* fadeIn — opacity 0→1 */

@@ -5,6 +5,7 @@ import {
   emitToDashboard,
   computeVoteCounts,
 } from './socket-rooms.js';
+import logger from './logger.js';
 
 /**
  * Register all Socket.IO event handlers.
@@ -22,7 +23,7 @@ import {
  */
 export function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
-    console.log(`[SOCKET] Client connected: ${socket.id}`);
+    logger.socket('Client connected', { socketId: socket.id });
 
     // ─── Player join ──────────────────────────────────────────────────────────
     socket.on('player:join', ({ sessionToken }) => {
@@ -43,7 +44,7 @@ export function registerSocketHandlers(io) {
       // Join personal + role rooms
       joinPlayerRooms(socket, player);
 
-      console.log(`[SOCKET] Player "${player.name}" (id:${player.id}) joined rooms`);
+      logger.socket('Player joined rooms', { playerId: player.id, playerName: player.name });
 
       // Send full state sync to this player
       sendPlayerStateSync(socket, player);
@@ -61,7 +62,7 @@ export function registerSocketHandlers(io) {
 
       socket.join('admin');
       socket.clientType = 'admin';
-      console.log(`[SOCKET] Admin connected: ${socket.id}`);
+      logger.socket('Admin connected', { socketId: socket.id });
 
       // Send full admin state sync
       sendAdminStateSync(socket);
@@ -71,7 +72,7 @@ export function registerSocketHandlers(io) {
     socket.on('dashboard:join', () => {
       socket.join('dashboard');
       socket.clientType = 'dashboard';
-      console.log(`[SOCKET] Dashboard connected: ${socket.id}`);
+      logger.socket('Dashboard connected', { socketId: socket.id });
 
       // Send full dashboard state sync
       sendDashboardStateSync(socket);
@@ -79,10 +80,12 @@ export function registerSocketHandlers(io) {
 
     // ─── Disconnect ───────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
-      const label = socket.playerName
-        ? `"${socket.playerName}" (id:${socket.playerId})`
-        : socket.clientType || socket.id;
-      console.log(`[SOCKET] Disconnected: ${label}`);
+      logger.socket('Client disconnected', {
+        socketId: socket.id,
+        playerId: socket.playerId || null,
+        playerName: socket.playerName || null,
+        clientType: socket.clientType || null,
+      });
     });
   });
 }

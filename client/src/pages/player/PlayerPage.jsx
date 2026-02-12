@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import ConnectionStatus from '../../components/ConnectionStatus.jsx';
+import ScreenTransition from '../../components/ScreenTransition.jsx';
+import SkeletonLoader, { SkeletonCard } from '../../components/SkeletonLoader.jsx';
 import LoginScreen from './LoginScreen.jsx';
 import LobbyScreen from './LobbyScreen.jsx';
 import RoleRevealScreen from './RoleRevealScreen.jsx';
@@ -76,11 +78,14 @@ export default function PlayerPage() {
     }
   }, [player?.status, player?.id]);
 
-  // Loading state
+  // Loading state with skeleton
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-gray-400 text-lg">Chargement...</div>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-4">
+          <SkeletonCard />
+          <SkeletonLoader lines={2} />
+        </div>
       </div>
     );
   }
@@ -106,41 +111,160 @@ export default function PlayerPage() {
     }
   }
 
-  // ─── Not logged in ──────────────────────────────────────────────────────────
-  if (!player) {
-    return <LoginScreen />;
+  // Determine the current screen key for transitions
+  function getScreenKey() {
+    if (!player) return 'login';
+    if (gameStatus === 'finished') return 'finished';
+    if (gameStatus === 'setup') return 'lobby';
+    if (gameStatus === 'in_progress' && player.role && !roleRevealDismissed) return 'role-reveal';
+    if (player.status === 'ghost' && !eliminatedAcknowledged) return 'eliminated';
+    if (phaseResult) return 'phase-result';
+    if (currentPhase && currentPhase.status === 'voting') {
+      if (currentPhase.type === 'night') {
+        if (player.status === 'ghost') return 'night-ghost';
+        if (player.role === 'wolf') return 'night-wolf';
+        return 'night-villager';
+      }
+      if (currentPhase.type === 'village_council') {
+        if (player.status === 'alive') return 'council-vote';
+        return 'waiting-council';
+      }
+    }
+    return 'waiting';
   }
 
-  // ─── Game finished ──────────────────────────────────────────────────────────
-  if (gameStatus === 'finished') {
+  // Render the current screen content
+  function renderScreen() {
+    // ─── Not logged in ──────────────────────────────────────────────────────
+    if (!player) {
+      return <LoginScreen />;
+    }
+
+    // ─── Game finished ──────────────────────────────────────────────────────
+    if (gameStatus === 'finished') {
+      return (
+        <>
+          <GameEndScreen />
+          {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
+    }
+
+    // ─── Setup / Lobby ──────────────────────────────────────────────────────
+    if (gameStatus === 'setup') {
+      return (
+        <>
+          <LobbyScreen />
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
+    }
+
+    // ─── Game in progress ───────────────────────────────────────────────────
+
+    // Show role reveal if game just started and player hasn't seen it
+    if (gameStatus === 'in_progress' && player.role && !roleRevealDismissed) {
+      return (
+        <>
+          <RoleRevealScreen />
+          {/* RoleRevealScreen is a fixed overlay; when dismissed it returns null
+              and the effect above will pick up the localStorage change */}
+          <WaitingScreen />
+          {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
+    }
+
+    // Show eliminated transition if player just became a ghost
+    if (player.status === 'ghost' && !eliminatedAcknowledged) {
+      return (
+        <>
+          <EliminatedScreen
+            onContinue={() => {
+              setEliminatedAcknowledged(true);
+              localStorage.setItem(`ghost_ack_${player.id}`, '1');
+            }}
+          />
+          {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
+    }
+
+    // Show phase result if available (between phases)
+    if (phaseResult) {
+      return (
+        <>
+          <PhaseResultScreen />
+          {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
+    }
+
+    // ─── Active phase routing ─────────────────────────────────────────────
+
+    if (currentPhase && currentPhase.status === 'voting') {
+      // Night phase
+      if (currentPhase.type === 'night') {
+        // Ghost players
+        if (player.status === 'ghost') {
+          return (
+            <>
+              <NightGhostVote />
+              {renderSpecialPrompt()}
+              <ConnectionStatus connected={connected} position="bottom" />
+            </>
+          );
+        }
+        // Wolf players
+        if (player.role === 'wolf') {
+          return (
+            <>
+              <NightWolfVote />
+              {renderSpecialPrompt()}
+              <ConnectionStatus connected={connected} position="bottom" />
+            </>
+          );
+        }
+        // Villager players
+        return (
+          <>
+            <NightVillagerGuess />
+            {renderSpecialPrompt()}
+            <ConnectionStatus connected={connected} position="bottom" />
+          </>
+        );
+      }
+
+      // Village council phase
+      if (currentPhase.type === 'village_council') {
+        // Only alive players vote at council
+        if (player.status === 'alive') {
+          return (
+            <>
+              <VillageCouncilVote />
+              {renderSpecialPrompt()}
+              <ConnectionStatus connected={connected} position="bottom" />
+            </>
+          );
+        }
+        // Ghosts just wait during council
+        return (
+          <>
+            <WaitingScreen />
+            {renderSpecialPrompt()}
+            <ConnectionStatus connected={connected} position="bottom" />
+          </>
+        );
+      }
+    }
+
+    // ─── Default: waiting ─────────────────────────────────────────────────
     return (
       <>
-        <GameEndScreen />
-        {renderSpecialPrompt()}
-        <ConnectionStatus connected={connected} position="bottom" />
-      </>
-    );
-  }
-
-  // ─── Setup / Lobby ──────────────────────────────────────────────────────────
-  if (gameStatus === 'setup') {
-    return (
-      <>
-        <LobbyScreen />
-        <ConnectionStatus connected={connected} position="bottom" />
-      </>
-    );
-  }
-
-  // ─── Game in progress ───────────────────────────────────────────────────────
-
-  // Show role reveal if game just started and player hasn't seen it
-  if (gameStatus === 'in_progress' && player.role && !roleRevealDismissed) {
-    return (
-      <>
-        <RoleRevealScreen />
-        {/* RoleRevealScreen is a fixed overlay; when dismissed it returns null
-            and the effect above will pick up the localStorage change */}
         <WaitingScreen />
         {renderSpecialPrompt()}
         <ConnectionStatus connected={connected} position="bottom" />
@@ -148,97 +272,9 @@ export default function PlayerPage() {
     );
   }
 
-  // Show eliminated transition if player just became a ghost
-  if (player.status === 'ghost' && !eliminatedAcknowledged) {
-    return (
-      <>
-        <EliminatedScreen
-          onContinue={() => {
-            setEliminatedAcknowledged(true);
-            localStorage.setItem(`ghost_ack_${player.id}`, '1');
-          }}
-        />
-        {renderSpecialPrompt()}
-        <ConnectionStatus connected={connected} position="bottom" />
-      </>
-    );
-  }
-
-  // Show phase result if available (between phases)
-  if (phaseResult) {
-    return (
-      <>
-        <PhaseResultScreen />
-        {renderSpecialPrompt()}
-        <ConnectionStatus connected={connected} position="bottom" />
-      </>
-    );
-  }
-
-  // ─── Active phase routing ─────────────────────────────────────────────────
-
-  if (currentPhase && currentPhase.status === 'voting') {
-    // Night phase
-    if (currentPhase.type === 'night') {
-      // Ghost players
-      if (player.status === 'ghost') {
-        return (
-          <>
-            <NightGhostVote />
-            {renderSpecialPrompt()}
-            <ConnectionStatus connected={connected} position="bottom" />
-          </>
-        );
-      }
-      // Wolf players
-      if (player.role === 'wolf') {
-        return (
-          <>
-            <NightWolfVote />
-            {renderSpecialPrompt()}
-            <ConnectionStatus connected={connected} position="bottom" />
-          </>
-        );
-      }
-      // Villager players
-      return (
-        <>
-          <NightVillagerGuess />
-          {renderSpecialPrompt()}
-          <ConnectionStatus connected={connected} position="bottom" />
-        </>
-      );
-    }
-
-    // Village council phase
-    if (currentPhase.type === 'village_council') {
-      // Only alive players vote at council
-      if (player.status === 'alive') {
-        return (
-          <>
-            <VillageCouncilVote />
-            {renderSpecialPrompt()}
-            <ConnectionStatus connected={connected} position="bottom" />
-          </>
-        );
-      }
-      // Ghosts just wait during council
-      return (
-        <>
-          <WaitingScreen />
-          {renderSpecialPrompt()}
-          <ConnectionStatus connected={connected} position="bottom" />
-        </>
-      );
-    }
-  }
-
-  // ─── Default: waiting ─────────────────────────────────────────────────────
   return (
-    <>
-      <WaitingScreen />
-      {renderSpecialPrompt()}
-      <ConnectionStatus connected={connected} position="bottom" />
-    </>
+    <ScreenTransition screenKey={getScreenKey()}>
+      {renderScreen()}
+    </ScreenTransition>
   );
 }

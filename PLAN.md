@@ -116,7 +116,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 6 — API + interface Joueur XXX
+## Phase 6 — API + interface Joueur ✅
 
 **Routes API (`server/routes/player.js` + `server/routes/game.js`) :**
 - `POST /api/player/join { name }`, `GET /api/player/me`, `GET /api/game/state`, `GET /api/game/phase/:id`
@@ -145,7 +145,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 7 — Dashboard projeté
+## Phase 7 — Dashboard projeté ✅
 
 **Interface React (`client/src/pages/dashboard/`) :**
 - `DashboardPage.jsx` — machine à états avec overlays (night, council, result, challenge, timer, end)
@@ -165,7 +165,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 8 — Intégration Socket.IO complète
+## Phase 8 — Intégration Socket.IO complète ✅
 
 **Fichier principal : `server/socket-handlers.js` (réécriture complète) + `server/socket-rooms.js`**
 
@@ -194,7 +194,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 9 — Rôles spéciaux
+## Phase 9 — Rôles spéciaux ✅
 
 **Fichier : `server/special-roles.js`** + modifications dans `game-engine.js`, `routes/admin.js`, pages player.
 
@@ -216,7 +216,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 
 ---
 
-## Phase 10 — Système de scoring
+## Phase 10 — Système de scoring ✅
 
 Implémentation complète dans `server/game-engine.js` :
 
@@ -237,7 +237,7 @@ Scores invisibles pour les joueurs, visibles pour l'admin. Override admin possib
 
 ---
 
-## Phase 11 — Résilience et cas limites
+## Phase 11 — Résilience et cas limites ✅
 
 - **`server/state-recovery.js`** — reconstruction état complet depuis SQLite au restart serveur
 - **Dédoublonnage votes** — vérification avant insertion
@@ -251,7 +251,7 @@ Scores invisibles pour les joueurs, visibles pour l'admin. Override admin possib
 
 ---
 
-## Phase 12 — Déploiement Docker
+## Phase 12 — Déploiement Docker ✅
 
 - `Dockerfile` multi-stage optimisé (build client → serveur prod)
 - `docker-compose.yml` avec volume `./data`, variable `TUNNEL_TOKEN`, healthcheck
@@ -262,7 +262,7 @@ Scores invisibles pour les joueurs, visibles pour l'admin. Override admin possib
 
 ---
 
-## Phase 13 — Mode test et polish
+## Phase 13 — Mode test et polish ✅
 
 **Mode test :**
 - Nombre joueurs/loups variable via `game_settings`

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { adminAuth } from '../middleware/auth.js';
 import { getDb, getAllSettings, getSetting, setSetting, resetGame } from '../db.js';
+import logger from '../logger.js';
 import {
   assignRoles,
   createPhase,
@@ -174,6 +175,7 @@ router.post('/game/start', (req, res) => {
   }
 
   setSetting('game_status', 'in_progress');
+  logger.game('Game started', { playerCount });
 
   const io = req.app.get('io');
   if (io) {
@@ -215,6 +217,7 @@ router.post('/phase/create', (req, res) => {
 
   try {
     const phase = createPhase(type);
+    logger.phase('Phase created', { phaseId: phase.id, type });
     res.json(phase);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -239,6 +242,7 @@ router.post('/phase/start', (req, res) => {
 
   try {
     const phase = startPhase(Number(phaseId));
+    logger.phase('Phase started', { phaseId: phase.id, type: phase.type });
     const db = getDb();
 
     const io = req.app.get('io');
@@ -329,6 +333,7 @@ router.post('/phase/open-voting', (req, res) => {
 
   try {
     const phase = openVoting(Number(phaseId));
+    logger.phase('Voting opened', { phaseId: phase.id });
 
     const io = req.app.get('io');
     if (io) {
@@ -361,6 +366,7 @@ router.post('/phase/close-voting', (req, res) => {
     // Force-close: works even if not everyone has voted.
     // Absent players' votes are simply not counted (abstention).
     const phase = closeVoting(Number(phaseId));
+    logger.phase('Voting closed', { phaseId: phase.id });
 
     const io = req.app.get('io');
     if (io) {
@@ -423,11 +429,13 @@ router.post('/phase/reveal', (req, res) => {
         const immuneResult = handleImmunite(Number(phaseId), victim.playerId);
         if (immuneResult.applied) {
           immuneApplied.push({ playerId: victim.playerId, playerName: immuneResult.playerName });
+          logger.special('Immunity applied', { playerId: victim.playerId, playerName: immuneResult.playerName });
           continue; // Skip elimination — player is immune
         }
 
         const player = eliminatePlayer(victim.playerId, Number(phaseId), victim.eliminatedBy);
         eliminated.push(player);
+        logger.phase('Player eliminated via reveal', { playerId: player.id, playerName: player.name, eliminatedBy: victim.eliminatedBy });
 
         // Update room membership: player becomes ghost
         if (io) {
@@ -435,7 +443,7 @@ router.post('/phase/reveal', (req, res) => {
         }
       } catch (err) {
         // Skip errors (e.g., already eliminated)
-        console.warn(`[ADMIN] Could not eliminate player ${victim.playerId}: ${err.message}`);
+        logger.error('Could not eliminate player', { playerId: victim.playerId, error: err.message });
       }
     }
   }
@@ -449,8 +457,11 @@ router.post('/phase/reveal', (req, res) => {
   let scoreChanges = [];
   try {
     scoreChanges = computePhaseScores(Number(phaseId));
+    if (scoreChanges.length > 0) {
+      logger.score('Phase scores computed', { phaseId: Number(phaseId), changes: scoreChanges.length });
+    }
   } catch (err) {
-    console.warn(`[ADMIN] Could not compute phase scores: ${err.message}`);
+    logger.error('Could not compute phase scores', { phaseId: Number(phaseId), error: err.message });
   }
 
   if (io) {
@@ -520,6 +531,7 @@ router.post('/phase/skip', (req, res) => {
     setSetting('current_phase_id', null);
   }
 
+  logger.phase('Phase skipped', { phaseId: Number(phaseId) });
   res.json({ skipped: true, phaseId: Number(phaseId) });
 });
 
@@ -599,6 +611,7 @@ router.post('/special/trigger', (req, res) => {
 
     switch (power) {
       case 'protecteur':
+        logger.special('Protecteur triggered', { phaseId: effectivePhaseId });
         result = handleProtecteur(io, effectivePhaseId);
         break;
 
@@ -606,10 +619,12 @@ router.post('/special/trigger', (req, res) => {
         if (!victimId) {
           return res.status(400).json({ error: 'victimId requis pour la sorcière' });
         }
+        logger.special('Sorciere triggered', { phaseId: effectivePhaseId, victimId: Number(victimId) });
         result = handleSorciere(io, effectivePhaseId, Number(victimId));
         break;
 
       case 'voyante':
+        logger.special('Voyante triggered', { phaseId: effectivePhaseId });
         result = handleVoyante(io, effectivePhaseId);
         break;
 
@@ -987,6 +1002,8 @@ router.post('/game/reset', (req, res) => {
   setSetting('timer_duration', null);
   setSetting('timer_started_at', null);
 
+  logger.game('Game reset');
+
   const io = req.app.get('io');
   if (io) {
     emitToAll(io, 'game:reset', {});
@@ -1027,12 +1044,14 @@ router.get('/scoreboard', (req, res) => {
 
 router.post('/game/end', (req, res) => {
   setSetting('game_status', 'finished');
+  logger.game('Game ended');
 
   let scoreChanges = [];
   try {
     scoreChanges = computeFinalScores();
+    logger.score('Final scores computed', { changes: scoreChanges.length });
   } catch (err) {
-    console.warn(`[ADMIN] Could not compute final scores: ${err.message}`);
+    logger.error('Could not compute final scores', { error: err.message });
   }
 
   const scoreboard = getScoreboard();

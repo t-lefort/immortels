@@ -3,12 +3,15 @@ import AdminPage from './pages/admin/AdminPage.jsx';
 import PlayerPage from './pages/player/PlayerPage.jsx';
 import DashboardPage from './pages/dashboard/DashboardPage.jsx';
 import { PlayerProvider } from './contexts/PlayerContext.jsx';
+import { ToastProvider } from './contexts/ToastContext.jsx';
 
 function PlayPageWrapper() {
   return (
-    <PlayerProvider>
-      <PlayerPage />
-    </PlayerProvider>
+    <ToastProvider>
+      <PlayerProvider>
+        <PlayerPage />
+      </PlayerProvider>
+    </ToastProvider>
   );
 }
 
