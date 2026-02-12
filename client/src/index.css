@@ -6,3 +6,231 @@
   --color-villager: #1a1a4e;
   --color-ghost: #2d6a4f;
 }
+
+/* ─── Dashboard Animations ──────────────────────────────────────────────── */
+
+/* fadeIn — opacity 0→1 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* slideUp — translateY(20px)→0 with fadeIn */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* slideInLeft — for scoreboard entries */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* slideInRight — for scoreboard entries from right */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* pulseGlow — subtle glow pulsing */
+@keyframes pulseGlow {
+  0%, 100% {
+    text-shadow: 0 0 10px rgba(139, 0, 0, 0.3), 0 0 30px rgba(139, 0, 0, 0.1);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(139, 0, 0, 0.6), 0 0 60px rgba(139, 0, 0, 0.3);
+  }
+}
+
+/* pulseGlowWhite — subtle white glow pulsing */
+@keyframes pulseGlowWhite {
+  0%, 100% {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 30px rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.4), 0 0 60px rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* letterReveal — typewriter letter-by-letter (used with steps) */
+@keyframes letterReveal {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* blink cursor for typewriter effect */
+@keyframes blinkCursor {
+  0%, 100% { border-color: transparent; }
+  50% { border-color: white; }
+}
+
+/* nightFall — opacity transition for night overlay */
+@keyframes nightFall {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* moonRise — moon entrance */
+@keyframes moonRise {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* twinkle — star twinkling */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* scaleIn — for badges */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* votePulse — vote progress animation */
+@keyframes votePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* countdownPulse — urgent countdown */
+@keyframes countdownPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* celebration — for challenge/end displays */
+@keyframes celebration {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* podiumRise — for end scoreboard podium */
+@keyframes podiumRise {
+  from {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+/* ─── Dashboard Utility Classes ─────────────────────────────────────────── */
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.6s ease-out forwards;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.5s ease-out forwards;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.5s ease-out forwards;
+}
+
+.animate-pulseGlow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.animate-pulseGlowWhite {
+  animation: pulseGlowWhite 3s ease-in-out infinite;
+}
+
+.animate-nightFall {
+  animation: nightFall 2s ease-in-out forwards;
+}
+
+.animate-moonRise {
+  animation: moonRise 2s ease-out forwards;
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.5s ease-out forwards;
+}
+
+.animate-votePulse {
+  animation: votePulse 1.5s ease-in-out infinite;
+}
+
+.animate-countdownPulse {
+  animation: countdownPulse 0.5s ease-in-out infinite;
+}
+
+.animate-celebration {
+  animation: celebration 0.8s ease-out forwards;
+}
+
+.animate-podiumRise {
+  animation: podiumRise 0.8s ease-out forwards;
+}
+
+/* Typewriter container */
+.typewriter {
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 3px solid white;
+  animation: blinkCursor 0.7s step-end infinite;
+}
+
+/* Stars background for night display */
+.stars-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: white;
+  border-radius: 50%;
+  animation: twinkle var(--twinkle-duration, 2s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+}
+
