@@ -113,9 +113,10 @@ export default function DashboardPage() {
             />
           )}
 
-          {/* Timer overlay (shows on top of night/council when timer is running) */}
-          {overlay !== 'result' && overlay !== 'end' && timer && (
+          {/* Timer overlay (shows on top of night, but NOT council which has its own timer) */}
+          {overlay !== 'result' && overlay !== 'end' && overlay !== 'council' && timer && (
             <TimerOverlay
+              key={timer.startedAt}
               timer={timer}
             />
           )}

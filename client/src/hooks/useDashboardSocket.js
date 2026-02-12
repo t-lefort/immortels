@@ -115,6 +115,7 @@ export function useDashboardSocket() {
       setEliminatedPlayer(null);
       setVoteProgress({ count: 0, total: 0 });
       setSpeechOrder(null);
+      setTimer(null); // Clear any previous timer to prevent stacking
 
       if (phase.type === 'night') {
         setOverlay('night');
@@ -125,10 +126,12 @@ export function useDashboardSocket() {
 
     socket.on('phase:voting_opened', (data) => {
       if (data.phase) setCurrentPhase(data.phase);
+      setTimer(null); // Clear debate/speech timer when voting opens
     });
 
     socket.on('phase:voting_closed', (data) => {
       if (data.phase) setCurrentPhase(data.phase);
+      setTimer(null); // Clear any timer when voting closes
     });
 
     socket.on('phase:vote_update', (data) => {
@@ -139,6 +142,7 @@ export function useDashboardSocket() {
 
     socket.on('phase:result', (data) => {
       setPhaseResult(data);
+      setTimer(null); // Clear any running timer when result is revealed
       if (data.eliminated && data.eliminated.length > 0) {
         setEliminatedPlayer(data.eliminated[0]);
         // Update players list: mark eliminated players
