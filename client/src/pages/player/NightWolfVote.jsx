@@ -11,7 +11,7 @@ import CountdownTimer from '../../components/CountdownTimer.jsx';
  */
 export default function NightWolfVote() {
   const {
-    player, players, wolves, vote, hasVoted,
+    players, wolves, vote, hasVoted,
     voteCount, totalExpected, timerDuration, setTimerDuration,
   } = usePlayer();
   const [selected, setSelected] = useState(null);
@@ -113,26 +113,6 @@ export default function NightWolfVote() {
             <p className="text-wolf text-center text-sm mb-4">{error}</p>
           )}
 
-          {/* Wolf team reminder */}
-          {wolves.length > 0 && (
-            <div className="mt-4 mb-4">
-              <p className="text-wolf/60 text-xs uppercase tracking-wider mb-2">Votre meute</p>
-              <div className="flex flex-wrap gap-2">
-                {wolves.map((w) => (
-                  <span
-                    key={w.id}
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      w.id === player?.id
-                        ? 'bg-wolf/30 text-wolf border border-wolf/50'
-                        : 'bg-gray-800 text-gray-400 border border-gray-700'
-                    }`}
-                  >
-                    {w.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 

@@ -4,14 +4,12 @@ import CountdownTimer from '../../components/CountdownTimer.jsx';
 /**
  * Between-phases waiting screen.
  * Shows player status, list of eliminated players.
- * If wolf: show wolf team members.
  * Role is NOT shown here.
  */
 export default function WaitingScreen() {
-  const { player, players, wolves, eliminated, timerDuration, setTimerDuration, connected } = usePlayer();
+  const { player, players, eliminated, timerDuration, setTimerDuration, connected } = usePlayer();
 
   const isGhost = player?.status === 'ghost';
-  const isWolf = player?.role === 'wolf';
   const alivePlayers = players.filter((p) => p.status === 'alive');
   const ghostPlayers = players.filter((p) => p.status === 'ghost');
 
@@ -52,33 +50,6 @@ export default function WaitingScreen() {
         </div>
         <p className="text-gray-400">En attente de la prochaine phase...</p>
       </div>
-
-      {/* Wolf team (only for wolves) */}
-      {isWolf && wolves.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-wolf font-semibold text-sm uppercase tracking-wider mb-3">
-            Meute de loups
-          </h3>
-          <div className="bg-wolf/10 border border-wolf/30 rounded-xl p-4">
-            <div className="space-y-2">
-              {wolves.map((w) => (
-                <div key={w.id} className="flex items-center justify-between">
-                  <span className="text-white font-medium">{w.name}</span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
-                      w.status === 'ghost'
-                        ? 'bg-ghost/20 text-green-400'
-                        : 'bg-green-900/30 text-green-500'
-                    }`}
-                  >
-                    {w.status === 'ghost' ? 'Fantôme' : 'Vivant'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Game stats */}
       <div className="grid grid-cols-2 gap-3 mb-6">
