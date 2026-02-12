@@ -77,14 +77,14 @@ export default function NightGhostVote() {
     <div className="min-h-screen bg-background px-4 py-6 pb-28">
       {/* Header */}
       <div className="text-center mb-4">
-        <div className="inline-block px-3 py-1 rounded-full bg-ghost/20 text-green-400 text-xs font-medium uppercase tracking-wider mb-2">
-          Nuit - Vote Fantôme
+        <div className="inline-block px-3 py-1 rounded-full bg-gray-700/50 text-gray-300 text-xs font-medium uppercase tracking-wider mb-2">
+          Nuit - Vote
         </div>
         <h2 className="text-xl font-bold text-white mb-1">
-          Vengeance des fantômes
+          Choisissez un joueur
         </h2>
         <p className="text-gray-500 text-sm">
-          Choisissez un vivant à éliminer
+          Sélectionnez un joueur pour voter
         </p>
       </div>
 
@@ -111,8 +111,8 @@ export default function NightGhostVote() {
       {/* ─── Ghost Elimination Vote ─────────────────────────────────────── */}
       {alreadyVoted ? (
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-ghost/20 border-2 border-ghost flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+          <div className="w-16 h-16 rounded-full bg-gray-700/30 border-2 border-gray-500 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -142,7 +142,7 @@ export default function NightGhostVote() {
       {isVillagerGhost && (
         <div className="mt-6">
           <div className="border-t border-gray-800 pt-6 mb-4">
-            <h3 className="text-ghost font-semibold text-sm uppercase tracking-wider mb-1">
+            <h3 className="text-gray-300 font-semibold text-sm uppercase tracking-wider mb-1">
               Identification des loups
             </h3>
             <p className="text-gray-500 text-xs mb-4">
@@ -153,7 +153,7 @@ export default function NightGhostVote() {
 
           {alreadyIdentified || identSubmitted ? (
             <div className="text-center mb-4">
-              <p className="text-green-400 text-sm">Identifications envoyées</p>
+              <p className="text-gray-400 text-sm">Identifications envoyées</p>
             </div>
           ) : (
             <>
@@ -165,7 +165,7 @@ export default function NightGhostVote() {
                     className={`
                       w-full text-left rounded-lg border p-3 min-h-[48px] transition-all
                       ${suspectedWolves.has(p.id)
-                        ? 'border-wolf bg-wolf/10'
+                        ? 'border-yellow-600 bg-yellow-900/20'
                         : 'border-gray-700 bg-gray-800/50 active:bg-gray-700/70'
                       }
                     `}
@@ -173,8 +173,8 @@ export default function NightGhostVote() {
                     <div className="flex items-center justify-between">
                       <span className="text-white font-medium">{p.name}</span>
                       {suspectedWolves.has(p.id) && (
-                        <span className="text-wolf text-xs font-medium px-2 py-0.5 rounded-full bg-wolf/20">
-                          Loup ?
+                        <span className="text-yellow-500 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-900/30">
+                          Suspect
                         </span>
                       )}
                     </div>
@@ -186,8 +186,8 @@ export default function NightGhostVote() {
                 <button
                   onClick={handleIdentifySubmit}
                   disabled={submitting}
-                  className="w-full py-3 rounded-xl bg-ghost text-white font-bold text-base
-                             active:bg-green-800 transition-colors min-h-[48px]
+                  className="w-full py-3 rounded-xl bg-gray-600 text-white font-bold text-base
+                             active:bg-gray-700 transition-colors min-h-[48px]
                              disabled:opacity-50 mb-4"
                 >
                   {submitting ? 'Envoi...' : `Identifier ${suspectedWolves.size} joueur${suspectedWolves.size > 1 ? 's' : ''}`}
@@ -199,7 +199,7 @@ export default function NightGhostVote() {
       )}
 
       {error && (
-        <p className="text-wolf text-center text-sm mb-4">{error}</p>
+        <p className="text-red-400 text-center text-sm mb-4">{error}</p>
       )}
 
       {/* Fixed bottom vote button */}
@@ -207,10 +207,10 @@ export default function NightGhostVote() {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
           <button
             onClick={() => setConfirming(true)}
-            className="w-full py-4 rounded-xl bg-ghost text-white font-bold text-lg
-                       active:bg-green-800 transition-colors min-h-[56px]"
+            className="w-full py-4 rounded-xl bg-gray-600 text-white font-bold text-lg
+                       active:bg-gray-700 transition-colors min-h-[56px]"
           >
-            Voter pour éliminer {selectedTarget.name}
+            Voter pour {selectedTarget.name}
           </button>
         </div>
       )}
@@ -219,7 +219,7 @@ export default function NightGhostVote() {
       {confirming && selectedTarget && (
         <VoteConfirmation
           targetName={selectedTarget.name}
-          actionLabel="Éliminer"
+          actionLabel="Voter pour"
           onConfirm={handleVoteConfirm}
           onCancel={() => {
             setConfirming(false);

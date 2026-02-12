@@ -226,8 +226,11 @@ export function getScoreboard() {
   return request('/scoreboard');
 }
 
-export function endGame() {
-  return request('/game/end', { method: 'POST' });
+export function endGame(winner) {
+  return request('/game/end', {
+    method: 'POST',
+    body: JSON.stringify({ winner }),
+  });
 }
 
 // ─── Auth check ─────────────────────────────────────────────────────────────

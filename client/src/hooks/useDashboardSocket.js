@@ -28,6 +28,7 @@ export function useDashboardSocket() {
   const [phaseResult, setPhaseResult] = useState(null);
   const [eliminatedPlayer, setEliminatedPlayer] = useState(null);
   const [scoreboard, setScoreboard] = useState(null);
+  const [winner, setWinner] = useState(null);
 
   // Challenge display state
   const [challengeDisplay, setChallengeDisplay] = useState(null);
@@ -118,6 +119,7 @@ export function useDashboardSocket() {
       setPhaseResult(null);
       setEliminatedPlayer(null);
       setScoreboard(null);
+      setWinner(null);
       setChallengeDisplay(null);
       setOverlay(null);
       setPlayerCount(0);
@@ -126,6 +128,7 @@ export function useDashboardSocket() {
     socket.on('game:end', (data) => {
       setGameStatus('finished');
       if (data.scoreboard) setScoreboard(data.scoreboard);
+      if (data.winner) setWinner(data.winner);
       setOverlay('end');
     });
 
@@ -292,6 +295,7 @@ export function useDashboardSocket() {
     phaseResult,
     eliminatedPlayer,
     scoreboard,
+    winner,
     challengeDisplay,
     overlay,
     setOverlay,

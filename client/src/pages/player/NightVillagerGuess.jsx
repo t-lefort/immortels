@@ -47,17 +47,14 @@ export default function NightVillagerGuess() {
     <div className="min-h-screen bg-background px-4 py-6 pb-28">
       {/* Header */}
       <div className="text-center mb-4">
-        <div className="inline-block px-3 py-1 rounded-full bg-villager/30 text-blue-400 text-xs font-medium uppercase tracking-wider mb-2">
-          Nuit - Devinette
+        <div className="inline-block px-3 py-1 rounded-full bg-gray-700/50 text-gray-300 text-xs font-medium uppercase tracking-wider mb-2">
+          Nuit - Vote
         </div>
         <h2 className="text-xl font-bold text-white mb-1">
-          Qui est villageois ?
+          Choisissez un joueur
         </h2>
         <p className="text-gray-500 text-sm">
-          Choisissez un joueur que vous pensez être villageois
-        </p>
-        <p className="text-gray-600 text-xs mt-1">
-          +1 point si correct
+          Sélectionnez un joueur pour voter
         </p>
       </div>
 
@@ -84,8 +81,8 @@ export default function NightVillagerGuess() {
       {/* Already guessed state */}
       {alreadyGuessed ? (
         <div className="text-center mt-12">
-          <div className="w-16 h-16 rounded-full bg-villager/20 border-2 border-blue-500 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+          <div className="w-16 h-16 rounded-full bg-gray-700/30 border-2 border-gray-500 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -93,7 +90,7 @@ export default function NightVillagerGuess() {
               />
             </svg>
           </div>
-          <p className="text-gray-400 text-lg">Devinette enregistrée</p>
+          <p className="text-gray-400 text-lg">Vote enregistré</p>
           <p className="text-gray-600 text-sm mt-2">
             En attente des autres joueurs...
           </p>
@@ -114,7 +111,7 @@ export default function NightVillagerGuess() {
           </div>
 
           {error && (
-            <p className="text-wolf text-center text-sm mb-4">{error}</p>
+            <p className="text-red-400 text-center text-sm mb-4">{error}</p>
           )}
         </>
       )}
@@ -124,10 +121,10 @@ export default function NightVillagerGuess() {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
           <button
             onClick={() => setConfirming(true)}
-            className="w-full py-4 rounded-xl bg-villager text-white font-bold text-lg
-                       active:bg-blue-800 transition-colors min-h-[56px]"
+            className="w-full py-4 rounded-xl bg-gray-600 text-white font-bold text-lg
+                       active:bg-gray-700 transition-colors min-h-[56px]"
           >
-            Choisir {selected.name}
+            Voter pour {selected.name}
           </button>
         </div>
       )}
@@ -136,7 +133,7 @@ export default function NightVillagerGuess() {
       {confirming && selected && (
         <VoteConfirmation
           targetName={selected.name}
-          actionLabel="Choisir"
+          actionLabel="Voter pour"
           onConfirm={handleConfirm}
           onCancel={() => {
             setConfirming(false);

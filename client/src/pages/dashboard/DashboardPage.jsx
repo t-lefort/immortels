@@ -27,6 +27,7 @@ export default function DashboardPage() {
     timer,
     phaseResult,
     scoreboard,
+    winner,
     challengeDisplay,
     overlay,
     setOverlay,
@@ -135,7 +136,7 @@ export default function DashboardPage() {
 
       {/* ─── Game end ─────────────────────────────────────────── */}
       {gameStatus === 'finished' && (
-        <EndDisplay scoreboard={scoreboard} />
+        <EndDisplay scoreboard={scoreboard} winner={winner} />
       )}
     </div>
   );

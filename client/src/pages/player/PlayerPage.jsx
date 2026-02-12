@@ -11,7 +11,6 @@ import NightWolfVote from './NightWolfVote.jsx';
 import NightVillagerGuess from './NightVillagerGuess.jsx';
 import NightGhostVote from './NightGhostVote.jsx';
 import VillageCouncilVote from './VillageCouncilVote.jsx';
-import PhaseResultScreen from './PhaseResultScreen.jsx';
 import EliminatedScreen from './EliminatedScreen.jsx';
 import GameEndScreen from './GameEndScreen.jsx';
 import ProtecteurPrompt from './ProtecteurPrompt.jsx';
@@ -35,7 +34,6 @@ export default function PlayerPage() {
     connected,
     gameStatus,
     currentPhase,
-    phaseResult,
     specialPrompt,
   } = usePlayer();
 
@@ -118,7 +116,6 @@ export default function PlayerPage() {
     if (gameStatus === 'setup') return 'lobby';
     if (gameStatus === 'in_progress' && player.role && !roleRevealDismissed) return 'role-reveal';
     if (player.status === 'ghost' && !eliminatedAcknowledged) return 'eliminated';
-    if (phaseResult) return 'phase-result';
     if (currentPhase && currentPhase.status === 'voting') {
       if (currentPhase.type === 'night') {
         if (player.status === 'ghost') return 'night-ghost';
@@ -187,17 +184,6 @@ export default function PlayerPage() {
               localStorage.setItem(`ghost_ack_${player.id}`, '1');
             }}
           />
-          {renderSpecialPrompt()}
-          <ConnectionStatus connected={connected} position="bottom" />
-        </>
-      );
-    }
-
-    // Show phase result if available (between phases)
-    if (phaseResult) {
-      return (
-        <>
-          <PhaseResultScreen />
           {renderSpecialPrompt()}
           <ConnectionStatus connected={connected} position="bottom" />
         </>

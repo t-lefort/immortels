@@ -60,13 +60,19 @@ export default function AdminPage() {
 
     const unsubs = [
       on('state:sync', (data) => {
-        if (data.gameStatus) setGameStatus(data.gameStatus);
+        if (data.gameStatus) {
+          setGameStatus(data.gameStatus);
+          if (data.gameStatus !== 'setup') {
+            setActiveTab(prev => prev === 'setup' ? 'phases' : prev);
+          }
+        }
         if (data.currentPhase) setCurrentPhase(data.currentPhase);
         if (data.players) setPlayers(data.players);
       }),
       on('lobby:update', () => refreshPlayers()),
       on('game:started', () => {
         setGameStatus('in_progress');
+        setActiveTab(prev => prev === 'setup' ? 'phases' : prev);
         refreshPlayers();
       }),
       on('game:end', () => setGameStatus('finished')),
@@ -160,7 +166,7 @@ export default function AdminPage() {
       {/* Tab Navigation */}
       <div className="bg-gray-900/50 border-b border-gray-800 px-4 overflow-x-auto">
         <div className="flex gap-1">
-          {TABS.map(tab => (
+          {TABS.filter(tab => tab.id !== 'setup' || gameStatus === 'setup').map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}

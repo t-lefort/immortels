@@ -2,16 +2,23 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
 
 /**
  * Game end screen.
- * Shows that the game is finished.
+ * Shows that the game is finished and who won.
  */
 export default function GameEndScreen() {
-  const { player } = usePlayer();
+  const { player, winner } = usePlayer();
+
+  const wolvesWin = winner === 'wolves';
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
       <h1 className="text-4xl font-black text-white mb-4 text-center">
         Partie terminée !
       </h1>
+      {winner && (
+        <div className={`text-2xl font-bold mb-4 text-center ${wolvesWin ? 'text-red-400' : 'text-blue-400'}`}>
+          {wolvesWin ? 'Victoire des Loups' : 'Victoire des Villageois'}
+        </div>
+      )}
       <p className="text-gray-400 text-lg text-center mb-8">
         Merci d'avoir joué, {player?.name} !
       </p>

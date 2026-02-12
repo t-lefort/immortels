@@ -36,6 +36,7 @@ export function PlayerProvider({ children }) {
   const [specialResult, setSpecialResult] = useState(null);
   const [phaseResult, setPhaseResult] = useState(null);
   const [roleRevealed, setRoleRevealed] = useState(null);
+  const [winner, setWinner] = useState(null);
 
   // Track session token for socket reconnection
   const sessionTokenRef = useRef(null);
@@ -305,6 +306,7 @@ export function PlayerProvider({ children }) {
 
       on('game:end', (data) => {
         setGameStatus('finished');
+        if (data && data.winner) setWinner(data.winner);
       }),
 
       on('game:reset', () => {
@@ -434,6 +436,7 @@ export function PlayerProvider({ children }) {
     specialResult,
     phaseResult,
     roleRevealed,
+    winner,
 
     // Actions
     login,

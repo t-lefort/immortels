@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
  * Top 3 podium with gold/silver/bronze.
  * Final reveal: wolves or villagers victory.
  */
-export default function EndDisplay({ scoreboard }) {
+export default function EndDisplay({ scoreboard, winner: winnerProp }) {
   const [visibleCount, setVisibleCount] = useState(0);
   const [showPodium, setShowPodium] = useState(false);
   const [showVictory, setShowVictory] = useState(false);
@@ -17,9 +17,8 @@ export default function EndDisplay({ scoreboard }) {
   // Display order: from last to first (reverse)
   const displayOrder = [...sorted].reverse();
 
-  // Determine victory: count alive wolves
-  const aliveWolves = sorted.filter(p => p.role === 'wolf' && p.status === 'alive');
-  const wolvesWin = aliveWolves.length > 0;
+  // Determine victory: use explicit winner prop or fallback to alive wolves count
+  const wolvesWin = winnerProp ? winnerProp === 'wolves' : sorted.filter(p => p.role === 'wolf' && p.status === 'alive').length > 0;
 
   // Animate entries one by one
   useEffect(() => {

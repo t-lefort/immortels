@@ -19,16 +19,17 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
     } catch { /* ignore */ }
   }
 
-  async function handleComputeFinalScores() {
-    if (!confirm('Calculer les scores finaux ? (+3 pour chaque survivant)')) return;
+  async function handleEndGame(winner) {
+    const winnerLabel = winner === 'wolves' ? 'des Loups' : 'des Villageois';
+    if (!confirm(`Terminer la partie avec la victoire ${winnerLabel} ? (+3 pour chaque survivant)`)) return;
 
     setLoading(true);
     try {
-      const result = await api.endGame();
+      const result = await api.endGame(winner);
       setScoreboard(result.scoreboard);
       setMessage({
         type: 'success',
-        text: `Partie terminee. ${result.scoreChanges.length} bonus de survie appliques.`,
+        text: `Partie terminee - Victoire ${winnerLabel}. ${result.scoreChanges.length} bonus de survie appliques.`,
       });
       refreshPlayers();
     } catch (err) {
@@ -121,6 +122,38 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
         </div>
       )}
 
+      {/* End condition indicator */}
+      {gameStatus === 'in_progress' && (() => {
+        const aliveWolves = scoreboard.filter(p => p.role === 'wolf' && p.status === 'alive').length;
+        const aliveVillagers = scoreboard.filter(p => p.role === 'villager' && p.status === 'alive').length;
+        const wolvesAllDead = aliveWolves === 0 && scoreboard.length > 0;
+        const wolvesOverpower = aliveWolves >= aliveVillagers && aliveWolves > 0;
+
+        return (
+          <div className={`px-4 py-3 rounded-lg text-sm border ${
+            wolvesAllDead ? 'bg-blue-900/30 border-blue-800 text-blue-300' :
+            wolvesOverpower ? 'bg-red-900/30 border-red-800 text-red-300' :
+            'bg-gray-900/50 border-gray-800 text-gray-400'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span>
+                <strong>{aliveWolves}</strong> loup{aliveWolves !== 1 ? 's' : ''} vivant{aliveWolves !== 1 ? 's' : ''} /
+                <strong> {aliveVillagers}</strong> villageois vivant{aliveVillagers !== 1 ? 's' : ''}
+              </span>
+              {wolvesAllDead && (
+                <span className="font-bold text-blue-300">Tous les loups sont elimines — Victoire Villageois</span>
+              )}
+              {wolvesOverpower && (
+                <span className="font-bold text-red-300">Loups &ge; Villageois — Victoire Loups</span>
+              )}
+              {!wolvesAllDead && !wolvesOverpower && (
+                <span className="text-gray-500">Aucune condition de fin remplie</span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Action buttons */}
       <div className="flex justify-between items-center">
         <button
@@ -132,13 +165,22 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
 
         <div className="flex gap-2">
           {gameStatus === 'in_progress' && (
-            <button
-              onClick={handleComputeFinalScores}
-              disabled={loading}
-              className="px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
-            >
-              {loading ? 'Calcul...' : 'Terminer la partie'}
-            </button>
+            <>
+              <button
+                onClick={() => handleEndGame('villagers')}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {loading ? 'Calcul...' : 'Fin — Victoire Villageois'}
+              </button>
+              <button
+                onClick={() => handleEndGame('wolves')}
+                disabled={loading}
+                className="px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {loading ? 'Calcul...' : 'Fin — Victoire Loups'}
+              </button>
+            </>
           )}
         </div>
       </div>

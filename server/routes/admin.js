@@ -1178,8 +1178,15 @@ router.get('/scoreboard', (req, res) => {
 });
 
 router.post('/game/end', (req, res) => {
+  const { winner: requestedWinner } = req.body || {};
+
+  // Validate winner if provided
+  if (requestedWinner && !['wolves', 'villagers'].includes(requestedWinner)) {
+    return res.status(400).json({ error: 'winner invalide. Valeurs acceptées: wolves, villagers' });
+  }
+
   setSetting('game_status', 'finished');
-  logger.game('Game ended');
+  logger.game('Game ended', { winner: requestedWinner || 'auto' });
 
   let scoreChanges = [];
   try {
@@ -1191,17 +1198,19 @@ router.post('/game/end', (req, res) => {
 
   const scoreboard = getScoreboard();
 
+  // Determine winner: use explicit parameter or auto-detect from alive wolves
+  const db = getDb();
+  const aliveWolves = db.prepare("SELECT COUNT(*) as count FROM players WHERE role = 'wolf' AND status = 'alive'").get().count;
+  const winner = requestedWinner || (aliveWolves > 0 ? 'wolves' : 'villagers');
+
+  setSetting('game_winner', winner);
+
   const io = req.app.get('io');
   if (io) {
-    // Determine winner
-    const db = getDb();
-    const aliveWolves = db.prepare("SELECT COUNT(*) as count FROM players WHERE role = 'wolf' AND status = 'alive'").get().count;
-    const winner = aliveWolves > 0 ? 'wolves' : 'villagers';
-
     emitToAll(io, 'game:end', { scoreboard, winner });
   }
 
-  res.json({ status: 'finished', scoreChanges, scoreboard });
+  res.json({ status: 'finished', scoreChanges, scoreboard, winner });
 });
 
 export default router;

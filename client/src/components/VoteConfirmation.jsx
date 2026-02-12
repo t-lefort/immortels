@@ -20,8 +20,8 @@ export default function VoteConfirmation({ targetName, onConfirm, onCancel, acti
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-3 px-4 rounded-lg bg-wolf text-white font-bold text-base
-                       active:bg-red-800 transition-colors min-h-[48px]"
+            className="flex-1 py-3 px-4 rounded-lg bg-gray-600 text-white font-bold text-base
+                       active:bg-gray-700 transition-colors min-h-[48px]"
           >
             Confirmer
           </button>

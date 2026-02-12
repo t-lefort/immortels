@@ -10,7 +10,7 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
  * "J'ai compris" button to dismiss permanently (localStorage).
  */
 export default function RoleRevealScreen() {
-  const { player, roleRevealed } = usePlayer();
+  const { player, roleRevealed, wolves } = usePlayer();
   const [dismissed, setDismissed] = useState(false);
   const containerRef = useRef(null);
 
@@ -99,6 +99,21 @@ export default function RoleRevealScreen() {
             ? 'Éliminez les villageois sans vous faire démasquer.'
             : 'Identifiez et éliminez les loups parmi vous.'}
         </p>
+
+        {/* Wolf pack members (only shown to wolves) */}
+        {isWolf && wolves.length > 0 && (
+          <div className="mt-4 mb-2">
+            <p className="text-red-400/70 text-sm">
+              Votre meute :{' '}
+              <span className="text-red-300/90 font-semibold">
+                {wolves
+                  .filter((w) => w.id !== player?.id)
+                  .map((w) => w.name)
+                  .join(', ')}
+              </span>
+            </p>
+          </div>
+        )}
 
         {/* Player name watermark over the role */}
         <p className="text-white/[0.08] text-xs mt-2 select-none">
