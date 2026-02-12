@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
+import ConnectionStatus from '../../components/ConnectionStatus.jsx';
 import LoginScreen from './LoginScreen.jsx';
 import LobbyScreen from './LobbyScreen.jsx';
 import RoleRevealScreen from './RoleRevealScreen.jsx';
@@ -29,6 +30,7 @@ export default function PlayerPage() {
   const {
     player,
     loading,
+    connected,
     gameStatus,
     currentPhase,
     phaseResult,
@@ -115,13 +117,19 @@ export default function PlayerPage() {
       <>
         <GameEndScreen />
         {renderSpecialPrompt()}
+        <ConnectionStatus connected={connected} position="bottom" />
       </>
     );
   }
 
   // ─── Setup / Lobby ──────────────────────────────────────────────────────────
   if (gameStatus === 'setup') {
-    return <LobbyScreen />;
+    return (
+      <>
+        <LobbyScreen />
+        <ConnectionStatus connected={connected} position="bottom" />
+      </>
+    );
   }
 
   // ─── Game in progress ───────────────────────────────────────────────────────
@@ -135,6 +143,7 @@ export default function PlayerPage() {
             and the effect above will pick up the localStorage change */}
         <WaitingScreen />
         {renderSpecialPrompt()}
+        <ConnectionStatus connected={connected} position="bottom" />
       </>
     );
   }
@@ -150,6 +159,7 @@ export default function PlayerPage() {
           }}
         />
         {renderSpecialPrompt()}
+        <ConnectionStatus connected={connected} position="bottom" />
       </>
     );
   }
@@ -160,6 +170,7 @@ export default function PlayerPage() {
       <>
         <PhaseResultScreen />
         {renderSpecialPrompt()}
+        <ConnectionStatus connected={connected} position="bottom" />
       </>
     );
   }
@@ -175,6 +186,7 @@ export default function PlayerPage() {
           <>
             <NightGhostVote />
             {renderSpecialPrompt()}
+            <ConnectionStatus connected={connected} position="bottom" />
           </>
         );
       }
@@ -184,6 +196,7 @@ export default function PlayerPage() {
           <>
             <NightWolfVote />
             {renderSpecialPrompt()}
+            <ConnectionStatus connected={connected} position="bottom" />
           </>
         );
       }
@@ -192,6 +205,7 @@ export default function PlayerPage() {
         <>
           <NightVillagerGuess />
           {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
         </>
       );
     }
@@ -204,6 +218,7 @@ export default function PlayerPage() {
           <>
             <VillageCouncilVote />
             {renderSpecialPrompt()}
+            <ConnectionStatus connected={connected} position="bottom" />
           </>
         );
       }
@@ -212,6 +227,7 @@ export default function PlayerPage() {
         <>
           <WaitingScreen />
           {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
         </>
       );
     }
@@ -222,6 +238,7 @@ export default function PlayerPage() {
     <>
       <WaitingScreen />
       {renderSpecialPrompt()}
+      <ConnectionStatus connected={connected} position="bottom" />
     </>
   );
 }

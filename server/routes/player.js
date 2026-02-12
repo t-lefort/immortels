@@ -34,6 +34,15 @@ router.post('/join', (req, res) => {
   }
 
   const cleanName = name.trim();
+
+  if (cleanName.length > 50) {
+    return res.status(400).json({ error: 'Le prénom ne peut pas dépasser 50 caractères.' });
+  }
+
+  if (cleanName.length < 1) {
+    return res.status(400).json({ error: 'Le prénom est requis.' });
+  }
+
   const db = getDb();
 
   // Check if player already exists (reconnection case)
@@ -158,6 +167,13 @@ router.post('/vote', requirePlayer, (req, res) => {
     return res.status(400).json({ error: 'targetId est requis.' });
   }
 
+  // Validate target exists
+  const db = getDb();
+  const target = db.prepare('SELECT id, name, role, status FROM players WHERE id = ?').get(Number(targetId));
+  if (!target) {
+    return res.status(400).json({ error: 'Joueur cible introuvable.' });
+  }
+
   const currentPhase = getCurrentPhase();
   if (!currentPhase) {
     return res.status(400).json({ error: 'Aucune phase en cours.' });
@@ -172,8 +188,24 @@ router.post('/vote', requirePlayer, (req, res) => {
   if (currentPhase.type === 'night') {
     if (player.status === 'ghost') {
       voteType = 'ghost_eliminate';
+      // Ghosts vote to eliminate alive players
+      if (target.status !== 'alive') {
+        return res.status(400).json({ error: 'Vous ne pouvez voter que pour un joueur vivant.' });
+      }
     } else if (player.role === 'wolf') {
       voteType = 'wolf';
+      // Wolf can't vote for wolf
+      if (target.role === 'wolf') {
+        return res.status(400).json({ error: 'Vous ne pouvez pas voter pour un autre loup.' });
+      }
+      // Wolf must be alive to vote
+      if (player.status !== 'alive') {
+        return res.status(400).json({ error: 'Les loups fantômes ne votent pas comme loups.' });
+      }
+      // Target must be alive
+      if (target.status !== 'alive') {
+        return res.status(400).json({ error: 'Vous ne pouvez voter que pour un joueur vivant.' });
+      }
     } else {
       // Villagers don't vote during night (they guess instead)
       return res.status(400).json({ error: 'Les villageois utilisent le vote devinette la nuit.' });
@@ -181,6 +213,10 @@ router.post('/vote', requirePlayer, (req, res) => {
   } else if (currentPhase.type === 'village_council') {
     if (player.status !== 'alive') {
       return res.status(400).json({ error: 'Les fantômes ne votent pas au conseil.' });
+    }
+    // Target must be alive for village council
+    if (target.status !== 'alive') {
+      return res.status(400).json({ error: 'Vous ne pouvez voter que pour un joueur vivant.' });
     }
     voteType = 'village';
   } else {
@@ -190,14 +226,10 @@ router.post('/vote', requirePlayer, (req, res) => {
   try {
     const vote = submitVote(currentPhase.id, player.id, Number(targetId), voteType);
 
-    if (!vote) {
-      return res.status(400).json({ error: 'Vous avez déjà voté.' });
-    }
-
     // Emit vote update with counts
     emitVoteUpdate(req.app.get('io'), currentPhase);
 
-    res.json({ success: true, voteType });
+    res.json({ success: true, voteType, updated: !!vote.updated });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -213,6 +245,23 @@ router.post('/villager-guess', requirePlayer, (req, res) => {
 
   if (!targetId) {
     return res.status(400).json({ error: 'targetId est requis.' });
+  }
+
+  // Validate target exists
+  const db = getDb();
+  const target = db.prepare('SELECT id, name, status FROM players WHERE id = ?').get(Number(targetId));
+  if (!target) {
+    return res.status(400).json({ error: 'Joueur cible introuvable.' });
+  }
+
+  // Target must be alive
+  if (target.status !== 'alive') {
+    return res.status(400).json({ error: 'Le joueur cible doit être vivant.' });
+  }
+
+  // Can't guess yourself
+  if (Number(targetId) === player.id) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas vous choisir vous-même.' });
   }
 
   const currentPhase = getCurrentPhase();
@@ -235,14 +284,10 @@ router.post('/villager-guess', requirePlayer, (req, res) => {
   try {
     const vote = submitVote(currentPhase.id, player.id, Number(targetId), 'villager_guess');
 
-    if (!vote) {
-      return res.status(400).json({ error: 'Vous avez déjà fait votre devinette.' });
-    }
-
     // Emit vote update with counts
     emitVoteUpdate(req.app.get('io'), currentPhase);
 
-    res.json({ success: true });
+    res.json({ success: true, updated: !!vote.updated });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -281,11 +326,24 @@ router.post('/ghost-identify', requirePlayer, (req, res) => {
     return res.status(400).json({ error: 'Le vote n\'est pas encore ouvert.' });
   }
 
+  // Validate all targets exist and are alive
+  const db = getDb();
+  const numericTargetIds = targetIds.map(Number);
+  for (const tid of numericTargetIds) {
+    const target = db.prepare('SELECT id, status FROM players WHERE id = ?').get(tid);
+    if (!target) {
+      return res.status(400).json({ error: `Joueur cible ${tid} introuvable.` });
+    }
+    if (target.status !== 'alive') {
+      return res.status(400).json({ error: `Le joueur cible doit être vivant.` });
+    }
+  }
+
   try {
     const identifications = submitGhostIdentifications(
       currentPhase.id,
       player.id,
-      targetIds.map(Number)
+      numericTargetIds
     );
 
     res.json({ success: true, identifications });
@@ -332,11 +390,15 @@ router.post('/special-respond', requirePlayer, (req, res) => {
   const { type, response } = req.body;
   const player = req.player;
 
-  if (!type || !response) {
-    return res.status(400).json({ error: 'type et response requis.' });
+  if (!type || typeof type !== 'string') {
+    return res.status(400).json({ error: 'type est requis.' });
+  }
+  if (!response || typeof response !== 'object') {
+    return res.status(400).json({ error: 'response est requis.' });
   }
 
   const io = req.app.get('io');
+  const db = getDb();
   const currentPhase = getCurrentPhase();
   const phaseId = currentPhase?.id || null;
 
@@ -351,6 +413,14 @@ router.post('/special-respond', requirePlayer, (req, res) => {
         // Verify the responding player is the protector
         if (player.special_role !== 'protecteur') {
           return res.status(403).json({ error: 'Vous n\'êtes pas le protecteur.' });
+        }
+        // Validate target exists and is alive
+        const protTarget = db.prepare('SELECT id, status FROM players WHERE id = ?').get(Number(response.targetId));
+        if (!protTarget) {
+          return res.status(400).json({ error: 'Joueur cible introuvable.' });
+        }
+        if (protTarget.status !== 'alive') {
+          return res.status(400).json({ error: 'Le joueur cible doit être vivant.' });
         }
         result = processProtecteurResponse(io, Number(response.targetId));
         break;
@@ -373,6 +443,11 @@ router.post('/special-respond', requirePlayer, (req, res) => {
         if (player.special_role !== 'voyante') {
           return res.status(403).json({ error: 'Vous n\'êtes pas la voyante.' });
         }
+        // Validate target exists
+        const seerTarget = db.prepare('SELECT id FROM players WHERE id = ?').get(Number(response.targetId));
+        if (!seerTarget) {
+          return res.status(400).json({ error: 'Joueur cible introuvable.' });
+        }
         result = processVoyanteResponse(io, Number(response.targetId));
         break;
       }
@@ -383,6 +458,14 @@ router.post('/special-respond', requirePlayer, (req, res) => {
         // Verify the responding player is the hunter
         if (player.special_role !== 'chasseur') {
           return res.status(403).json({ error: 'Vous n\'êtes pas le chasseur.' });
+        }
+        // Validate target exists and is alive
+        const hunterTarget = db.prepare('SELECT id, status FROM players WHERE id = ?').get(Number(response.targetId));
+        if (!hunterTarget) {
+          return res.status(400).json({ error: 'Joueur cible introuvable.' });
+        }
+        if (hunterTarget.status !== 'alive') {
+          return res.status(400).json({ error: 'Le joueur cible doit être vivant.' });
         }
         result = processChasseurResponse(io, Number(response.targetId), phaseId);
         break;
@@ -395,6 +478,14 @@ router.post('/special-respond', requirePlayer, (req, res) => {
         const mayorIdStr = getSetting('mayor_id');
         if (!mayorIdStr || Number(mayorIdStr) !== player.id) {
           return res.status(403).json({ error: 'Vous n\'êtes pas le maire.' });
+        }
+        // Validate target exists and is alive
+        const successionTarget = db.prepare('SELECT id, status FROM players WHERE id = ?').get(Number(response.targetId));
+        if (!successionTarget) {
+          return res.status(400).json({ error: 'Joueur cible introuvable.' });
+        }
+        if (successionTarget.status !== 'alive') {
+          return res.status(400).json({ error: 'Le nouveau maire doit être un joueur vivant.' });
         }
         result = processMayorSuccession(io, Number(response.targetId));
         break;

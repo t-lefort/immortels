@@ -153,22 +153,32 @@ export function getCurrentPhase() {
 
 /**
  * Submit a vote. Deduplicates: one vote per (phase, voter, voteType).
- * Returns the vote row, or null if already voted.
+ * If the player already voted, updates their existing vote (upsert).
+ * Returns { vote, updated } where updated=true if an existing vote was changed.
  */
 export function submitVote(phaseId, voterId, targetId, voteType) {
   const db = getDb();
 
   const existing = db.prepare(
-    'SELECT id FROM votes WHERE phase_id = ? AND voter_id = ? AND vote_type = ?'
+    'SELECT id, target_id FROM votes WHERE phase_id = ? AND voter_id = ? AND vote_type = ?'
   ).get(phaseId, voterId, voteType);
 
-  if (existing) return null;
+  if (existing) {
+    // Upsert: update the existing vote with the new target
+    db.prepare(
+      'UPDATE votes SET target_id = ? WHERE id = ?'
+    ).run(targetId, existing.id);
+
+    const updated = db.prepare('SELECT * FROM votes WHERE id = ?').get(existing.id);
+    return { ...updated, updated: true };
+  }
 
   const result = db.prepare(
     'INSERT INTO votes (phase_id, voter_id, target_id, vote_type, is_valid) VALUES (?, ?, ?, ?, 1)'
   ).run(phaseId, voterId, targetId, voteType);
 
-  return db.prepare('SELECT * FROM votes WHERE id = ?').get(result.lastInsertRowid);
+  const vote = db.prepare('SELECT * FROM votes WHERE id = ?').get(result.lastInsertRowid);
+  return { ...vote, updated: false };
 }
 
 /**

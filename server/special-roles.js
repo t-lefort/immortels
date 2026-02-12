@@ -62,11 +62,18 @@ export function handleMayorSuccession(io, eliminatedPlayerId) {
 
 /**
  * Process the mayor's succession choice.
+ * Validates that the new mayor is alive. If the chosen player is already dead,
+ * rejects the choice so admin can pick again.
  */
 export function processMayorSuccession(io, newMayorId) {
   const db = getDb();
-  const newMayor = db.prepare('SELECT id, name FROM players WHERE id = ?').get(Number(newMayorId));
+  const newMayor = db.prepare('SELECT id, name, status FROM players WHERE id = ?').get(Number(newMayorId));
   if (!newMayor) throw new Error(`Player ${newMayorId} not found`);
+
+  // New mayor must be alive
+  if (newMayor.status !== 'alive') {
+    throw new Error(`${newMayor.name} est un fantôme et ne peut pas devenir maire. Choisissez un joueur vivant.`);
+  }
 
   setSetting('mayor_id', String(newMayorId));
   setSetting('mayor_succession_pending', '0');
@@ -90,6 +97,8 @@ export function processMayorSuccession(io, newMayorId) {
 
 /**
  * Admin forces a mayor succession.
+ * Used when the eliminated mayor is unresponsive.
+ * Falls through to processMayorSuccession which validates the new mayor is alive.
  */
 export function forceMayorSuccession(io, newMayorId) {
   return processMayorSuccession(io, newMayorId);
@@ -433,15 +442,25 @@ export function handleChasseur(io, hunterId) {
   return { triggered: true, hunterId: hunter.id, targets: alivePlayers };
 }
 
+// Track hunter chain depth to prevent infinite recursion
+let hunterChainDepth = 0;
+const MAX_HUNTER_CHAIN_DEPTH = 5;
+
 /**
  * Process the hunter's choice — eliminate target and compute scoring.
  * Chain reaction: if target is also a hunter, trigger their power too.
+ * Recursion protection: max 5 chained hunter kills.
  */
 export function processChasseurResponse(io, targetId, phaseId) {
   const db = getDb();
 
-  const target = db.prepare('SELECT id, name, role, special_role FROM players WHERE id = ?').get(Number(targetId));
+  const target = db.prepare('SELECT id, name, role, special_role, status FROM players WHERE id = ?').get(Number(targetId));
   if (!target) throw new Error(`Player ${targetId} not found`);
+
+  // Check if target is already a ghost (can't kill twice)
+  if (target.status === 'ghost') {
+    throw new Error(`Le joueur ${target.name} est déjà un fantôme`);
+  }
 
   // Save the hunter player ID BEFORE clearing it
   const hunterPlayerIdStr = getSetting('hunter_player_id');
@@ -493,11 +512,26 @@ export function processChasseurResponse(io, targetId, phaseId) {
   });
 
   // Chain reaction: if the killed target is also a hunter, trigger their power
+  // with recursion protection (max 5 chains)
   if (target.special_role === 'chasseur') {
-    // Small delay to allow UI to process
-    setTimeout(() => {
-      handleChasseur(io, target.id);
-    }, 100);
+    hunterChainDepth++;
+    if (hunterChainDepth > MAX_HUNTER_CHAIN_DEPTH) {
+      console.warn(`[HUNTER] Chain reaction depth limit reached (${MAX_HUNTER_CHAIN_DEPTH}). Stopping chain.`);
+      hunterChainDepth = 0;
+      emitToAdmin(io, 'special:result', {
+        power: 'chasseur',
+        action: 'chain_limit_reached',
+        message: `Limite de chaîne chasseur atteinte (${MAX_HUNTER_CHAIN_DEPTH})`,
+      });
+    } else {
+      // Small delay to allow UI to process
+      setTimeout(() => {
+        handleChasseur(io, target.id);
+      }, 100);
+    }
+  } else {
+    // Reset chain depth when a non-hunter is killed
+    hunterChainDepth = 0;
   }
 
   // Check if killed target is the mayor — trigger succession

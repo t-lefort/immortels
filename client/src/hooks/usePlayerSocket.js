@@ -6,6 +6,9 @@ import { io } from 'socket.io-client';
  * Connects with the player's session token and listens to game events.
  * Handles reconnection: on reconnect, re-emits player:join to get
  * a fresh state:sync from the server (all state rebuilt from SQLite).
+ *
+ * Also fires a synthetic 'socket:reconnected' event that the PlayerContext
+ * uses to trigger an HTTP re-fetch of /api/player/me.
  */
 export function usePlayerSocket() {
   const socketRef = useRef(null);
@@ -13,6 +16,7 @@ export function usePlayerSocket() {
   const [connected, setConnected] = useState(false);
   const [gameState, setGameState] = useState(null);
   const listenersRef = useRef({});
+  const wasConnectedRef = useRef(false);
 
   const connect = useCallback((sessionToken) => {
     if (socketRef.current?.connected) return;
@@ -28,6 +32,15 @@ export function usePlayerSocket() {
       setConnected(true);
       // On every (re)connect, identify as this player
       socket.emit('player:join', { sessionToken: sessionTokenRef.current });
+
+      // Fire reconnect event if this is a reconnection (not first connect)
+      if (wasConnectedRef.current) {
+        const listeners = listenersRef.current['socket:reconnected'];
+        if (listeners) {
+          for (const fn of listeners) fn();
+        }
+      }
+      wasConnectedRef.current = true;
     });
 
     socket.on('disconnect', () => {
@@ -80,6 +93,7 @@ export function usePlayerSocket() {
       setConnected(false);
       setGameState(null);
       sessionTokenRef.current = null;
+      wasConnectedRef.current = false;
     }
   }, []);
 

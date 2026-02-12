@@ -181,6 +181,7 @@ export function PlayerProvider({ children }) {
         setGameStatus(me.gameStatus || 'setup');
         setCurrentPhase(me.currentPhase || null);
         setHasVoted(me.hasVoted || {});
+        setError(null);
 
         // Connect socket
         const cookieToken = getCookie('session_token');
@@ -198,9 +199,13 @@ export function PlayerProvider({ children }) {
             // ignore
           }
         }
-      } catch {
+      } catch (err) {
         // No valid session — player needs to login
         setPlayer(null);
+        // Only set error for network issues, not for 401s (which just means no session)
+        if (err.message && !err.message.includes('401') && !err.message.includes('Session invalide')) {
+          setError('Impossible de se connecter au serveur. Vérifiez votre connexion.');
+        }
       } finally {
         setLoading(false);
       }
@@ -215,6 +220,28 @@ export function PlayerProvider({ children }) {
     if (!player) return;
 
     const unsubs = [
+      // On socket reconnection, re-fetch full state via HTTP
+      on('socket:reconnected', async () => {
+        try {
+          const me = await playerApi.getMe();
+          setPlayer((prev) => ({ ...prev, ...me }));
+          setGameStatus(me.gameStatus || 'setup');
+          setCurrentPhase(me.currentPhase || null);
+          setHasVoted(me.hasVoted || {});
+          setError(null);
+        } catch (err) {
+          // Session expired — redirect to login
+          if (err.message && (err.message.includes('401') || err.message.includes('Session invalide'))) {
+            setPlayer(null);
+            setLoading(false);
+            setError('Session expirée. Veuillez vous reconnecter.');
+            disconnect();
+          } else {
+            setError('Erreur réseau. Nouvelle tentative en cours...');
+          }
+        }
+      }),
+
       on('state:sync', (data) => {
         if (data.gameStatus) setGameStatus(data.gameStatus);
         if (data.currentPhase !== undefined) setCurrentPhase(data.currentPhase);
@@ -225,6 +252,8 @@ export function PlayerProvider({ children }) {
         if (data.hasVoted !== undefined) setHasVoted(data.hasVoted ? { voted: true } : {});
         if (data.voteCount !== undefined) setVoteCount(data.voteCount);
         if (data.totalExpected !== undefined) setTotalExpected(data.totalExpected);
+        // Clear any previous errors on successful sync
+        setError(null);
       }),
 
       on('game:started', (data) => {

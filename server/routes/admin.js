@@ -131,6 +131,20 @@ router.get('/players', (req, res) => {
 router.post('/game/assign-roles', (req, res) => {
   const numWolves = req.body.numWolves ? Number(req.body.numWolves) : Number(getSetting('num_wolves'));
 
+  // Validate numWolves is a positive integer
+  if (!Number.isInteger(numWolves) || numWolves < 1) {
+    return res.status(400).json({ error: 'Le nombre de loups doit être un entier positif' });
+  }
+
+  // Validate numWolves is less than total players
+  const db = getDb();
+  const playerCount = db.prepare('SELECT COUNT(*) as count FROM players').get().count;
+  if (numWolves >= playerCount) {
+    return res.status(400).json({
+      error: `Impossible d'assigner ${numWolves} loups parmi ${playerCount} joueurs`,
+    });
+  }
+
   try {
     const players = assignRoles(numWolves);
     setSetting('num_wolves', String(numWolves));
@@ -189,6 +203,16 @@ router.post('/game/start', (req, res) => {
 
 router.post('/phase/create', (req, res) => {
   const { type } = req.body;
+  if (!type || (type !== 'night' && type !== 'village_council')) {
+    return res.status(400).json({ error: 'Type de phase invalide. Valeurs acceptées: night, village_council' });
+  }
+
+  // Game must be in progress
+  const gameStatus = getSetting('game_status');
+  if (gameStatus !== 'in_progress') {
+    return res.status(400).json({ error: 'La partie doit être en cours pour créer une phase' });
+  }
+
   try {
     const phase = createPhase(type);
     res.json(phase);
@@ -201,6 +225,16 @@ router.post('/phase/start', (req, res) => {
   const { phaseId } = req.body;
   if (!phaseId) {
     return res.status(400).json({ error: 'phaseId requis' });
+  }
+
+  // Validate phase exists before attempting to start
+  const dbCheck = getDb();
+  const phaseCheck = dbCheck.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  if (!phaseCheck) {
+    return res.status(404).json({ error: 'Phase introuvable' });
+  }
+  if (phaseCheck.status !== 'pending') {
+    return res.status(400).json({ error: `Impossible de démarrer une phase en statut "${phaseCheck.status}"` });
   }
 
   try {
@@ -283,6 +317,16 @@ router.post('/phase/open-voting', (req, res) => {
     return res.status(400).json({ error: 'phaseId requis' });
   }
 
+  // Validate phase exists and is in correct status
+  const dbCheck = getDb();
+  const phaseCheck = dbCheck.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  if (!phaseCheck) {
+    return res.status(404).json({ error: 'Phase introuvable' });
+  }
+  if (phaseCheck.status !== 'active') {
+    return res.status(400).json({ error: `Impossible d'ouvrir le vote pour une phase en statut "${phaseCheck.status}"` });
+  }
+
   try {
     const phase = openVoting(Number(phaseId));
 
@@ -303,7 +347,19 @@ router.post('/phase/close-voting', (req, res) => {
     return res.status(400).json({ error: 'phaseId requis' });
   }
 
+  // Validate phase exists and is in voting status
+  const dbCheck = getDb();
+  const phaseCheck = dbCheck.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  if (!phaseCheck) {
+    return res.status(404).json({ error: 'Phase introuvable' });
+  }
+  if (phaseCheck.status !== 'voting') {
+    return res.status(400).json({ error: `Impossible de fermer le vote pour une phase en statut "${phaseCheck.status}"` });
+  }
+
   try {
+    // Force-close: works even if not everyone has voted.
+    // Absent players' votes are simply not counted (abstention).
     const phase = closeVoting(Number(phaseId));
 
     const io = req.app.get('io');
@@ -607,11 +663,20 @@ router.post('/special/force', (req, res) => {
   }
 
   const io = req.app.get('io');
+  const db = getDb();
+
+  // Helper: validate a target ID exists in the database
+  function validateTarget(tid) {
+    if (!tid) return null;
+    return db.prepare('SELECT id, name, status FROM players WHERE id = ?').get(Number(tid));
+  }
 
   try {
     switch (power) {
       case 'protecteur': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
+        const target = validateTarget(targetId);
+        if (!target) return res.status(404).json({ error: 'Joueur cible introuvable' });
         const result = processProtecteurResponse(io, Number(targetId));
         res.json({ applied: true, power, ...result });
         break;
@@ -631,12 +696,19 @@ router.post('/special/force', (req, res) => {
       }
       case 'voyante': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
+        const target = validateTarget(targetId);
+        if (!target) return res.status(404).json({ error: 'Joueur cible introuvable' });
         const result = processVoyanteResponse(io, Number(targetId));
         res.json({ applied: true, power, ...result });
         break;
       }
       case 'chasseur': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
+        const target = validateTarget(targetId);
+        if (!target) return res.status(404).json({ error: 'Joueur cible introuvable' });
+        if (target.status !== 'alive') {
+          return res.status(400).json({ error: 'Le joueur cible doit être vivant' });
+        }
         const currentPhase = getCurrentPhase();
         const effectivePhaseId = phaseId ? Number(phaseId) : (currentPhase?.id || null);
         const result = processChasseurResponse(io, Number(targetId), effectivePhaseId);
@@ -645,6 +717,11 @@ router.post('/special/force', (req, res) => {
       }
       case 'mayor_succession': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
+        const target = validateTarget(targetId);
+        if (!target) return res.status(404).json({ error: 'Joueur cible introuvable' });
+        if (target.status !== 'alive') {
+          return res.status(400).json({ error: 'Le nouveau maire doit être un joueur vivant' });
+        }
         const result = forceMayorSuccession(io, Number(targetId));
         res.json({ applied: true, power, ...result });
         break;
@@ -716,6 +793,11 @@ router.post('/challenge', (req, res) => {
 
   if (!name || !specialRole) {
     return res.status(400).json({ error: 'name et specialRole requis' });
+  }
+
+  const validSpecialRoles = ['maire', 'sorciere', 'protecteur', 'voyante', 'chasseur', 'immunite'];
+  if (!validSpecialRoles.includes(specialRole)) {
+    return res.status(400).json({ error: `Rôle spécial invalide: ${specialRole}. Valeurs acceptées: ${validSpecialRoles.join(', ')}` });
   }
 
   const db = getDb();
@@ -802,6 +884,32 @@ router.put('/player/:id', (req, res) => {
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
+  }
+
+  // Validate field values
+  if (updates.role !== undefined && updates.role !== null && !['wolf', 'villager'].includes(updates.role)) {
+    return res.status(400).json({ error: 'Rôle invalide. Valeurs acceptées: wolf, villager' });
+  }
+  if (updates.status !== undefined && !['alive', 'ghost'].includes(updates.status)) {
+    return res.status(400).json({ error: 'Statut invalide. Valeurs acceptées: alive, ghost' });
+  }
+  if (updates.special_role !== undefined && updates.special_role !== null) {
+    const validSpecialRoles = ['maire', 'sorciere', 'protecteur', 'voyante', 'chasseur', 'immunite'];
+    if (!validSpecialRoles.includes(updates.special_role)) {
+      return res.status(400).json({ error: `Rôle spécial invalide. Valeurs acceptées: ${validSpecialRoles.join(', ')}, ou null` });
+    }
+  }
+  if (updates.score !== undefined && typeof updates.score !== 'number') {
+    return res.status(400).json({ error: 'Le score doit être un nombre' });
+  }
+  if (updates.name !== undefined) {
+    if (typeof updates.name !== 'string' || !updates.name.trim()) {
+      return res.status(400).json({ error: 'Le nom ne peut pas être vide' });
+    }
+    if (updates.name.trim().length > 50) {
+      return res.status(400).json({ error: 'Le nom ne peut pas dépasser 50 caractères' });
+    }
+    updates.name = updates.name.trim();
   }
 
   const setClauses = Object.keys(updates).map(f => `${f} = ?`).join(', ');

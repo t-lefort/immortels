@@ -7,6 +7,7 @@ import PlayersTab from './PlayersTab.jsx';
 import ScoresTab from './ScoresTab.jsx';
 import HistoryTab from './HistoryTab.jsx';
 import SettingsTab from './SettingsTab.jsx';
+import ConnectionStatus from '../../components/ConnectionStatus.jsx';
 import { useAdminSocket } from '../../hooks/useAdminSocket.js';
 import { getPlayers, checkAuth } from '../../services/adminApi.js';
 
@@ -125,6 +126,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-background text-white">
+      <ConnectionStatus connected={connected} position="top" />
       {/* Status Bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between text-sm">
         <div className="flex items-center gap-4">
