@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import { usePlayerSocket } from '../hooks/usePlayerSocket.js';
 import * as playerApi from '../services/playerApi.js';
 import { useToast } from './ToastContext.jsx';
+import { initSessionOverride, getOverrideToken } from '../services/sessionOverride.js';
 
 const PlayerContext = createContext(null);
 
@@ -109,11 +110,11 @@ export function PlayerProvider({ children }) {
       // This is acceptable because session_token is not a security-critical secret
       // (it's a player session, not admin auth).
 
-      // Store token from cookie
-      const cookieToken = getCookie('session_token');
-      if (cookieToken) {
-        sessionTokenRef.current = cookieToken;
-        connect(cookieToken);
+      // Use override token if active, otherwise read from cookie
+      const token = getOverrideToken() || getCookie('session_token');
+      if (token) {
+        sessionTokenRef.current = token;
+        connect(token);
       }
 
       return result;
@@ -197,6 +198,12 @@ export function PlayerProvider({ children }) {
     let ignore = false;
 
     async function tryReconnect() {
+      // If ?as=PlayerName is in the URL, resolve the override token first.
+      // This must happen before any API call so that playerApi.js can
+      // attach the X-Session-Token header.
+      await initSessionOverride();
+      if (ignore) return;
+
       try {
         const me = await playerApi.getMe();
         if (ignore) return;
@@ -207,11 +214,11 @@ export function PlayerProvider({ children }) {
         setHasVoted(me.hasVoted || {});
         setError(null);
 
-        // Connect socket
-        const cookieToken = getCookie('session_token');
-        if (cookieToken) {
-          sessionTokenRef.current = cookieToken;
-          connect(cookieToken);
+        // Connect socket — use override token if active, otherwise cookie
+        const token = getOverrideToken() || getCookie('session_token');
+        if (token) {
+          sessionTokenRef.current = token;
+          connect(token);
         }
 
         // Fetch wolves if applicable

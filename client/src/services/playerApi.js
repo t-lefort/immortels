@@ -1,12 +1,20 @@
+import { getOverrideToken } from './sessionOverride.js';
+
 const PLAYER_BASE = '/api/player';
 const GAME_BASE = '/api/game';
 
 async function request(url, options = {}) {
+  // If a session override is active (?as=PlayerName), send the token
+  // as a header so the server uses it instead of the cookie.
+  const overrideToken = getOverrideToken();
+  const extraHeaders = overrideToken ? { 'X-Session-Token': overrideToken } : {};
+
   const res = await fetch(url, {
     ...options,
-    credentials: 'include', // send session cookie
+    credentials: 'include', // send session cookie (fallback when no override)
     headers: {
       'Content-Type': 'application/json',
+      ...extraHeaders,
       ...options.headers,
     },
   });

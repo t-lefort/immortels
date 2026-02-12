@@ -23,6 +23,31 @@ import {
 const router = Router();
 
 /**
+ * GET /api/player/token-by-name?name=X
+ * Testing helper: returns the session token for a player by name.
+ * Used by the ?as=PlayerName multi-tab testing feature so each
+ * browser tab can impersonate a different player.
+ */
+router.get('/token-by-name', (req, res) => {
+  const { name } = req.query;
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name query parameter is required.' });
+  }
+
+  const db = getDb();
+  const player = db
+    .prepare('SELECT id, name, session_token FROM players WHERE name = ?')
+    .get(name.trim());
+
+  if (!player) {
+    return res.status(404).json({ error: `Player "${name.trim()}" not found.` });
+  }
+
+  res.json({ token: player.session_token, playerId: player.id, name: player.name });
+});
+
+/**
  * POST /api/player/join { name }
  * Creates a new player or reconnects an existing one.
  * Sets a session_token cookie for subsequent requests.

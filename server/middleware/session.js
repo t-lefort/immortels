@@ -3,10 +3,13 @@ import { getDb } from '../db.js';
 /**
  * Player session middleware.
  * Reads `session_token` cookie and attaches the matching player to `req.player`.
+ * Also supports `X-Session-Token` header as an override (for multi-tab testing
+ * via /play?as=PlayerName — each tab can act as a different player).
  * Does NOT reject if no session — some routes are public.
  */
 export function playerSession(req, _res, next) {
-  const token = req.cookies?.session_token;
+  // Header override takes priority (used by ?as= testing feature)
+  const token = req.headers['x-session-token'] || req.cookies?.session_token;
 
   if (token) {
     const player = getDb()
