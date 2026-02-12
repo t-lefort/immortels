@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
+
 /**
  * GameDisplay — Base persistent layer during game.
- * Left area (60%): Grid of alive players with name cards
- * Right area (40%): List of eliminated players with revealed roles
- * Top bar: Game title, current phase type/number, alive count
+ * Cinematic full-screen centered layout projected on 16:9 screen.
+ * Dramatic title, flowing centered player names, atmospheric effects.
+ * Eliminated players shown as a subtle ghostly footer.
  */
 export default function GameDisplay({ players, currentPhase, children }) {
   const alivePlayers = players.filter(p => p.status === 'alive');
@@ -17,198 +19,276 @@ export default function GameDisplay({ players, currentPhase, children }) {
 
   const phaseNumber = currentPhase ? currentPhase.id : '';
 
+  // Generate subtle background particles for atmosphere
+  const particles = useMemo(() => {
+    return Array.from({ length: 25 }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      delay: `${Math.random() * 5}s`,
+      duration: `${2 + Math.random() * 4}s`,
+      size: `${1 + Math.random() * 2}px`,
+    }));
+  }, []);
+
+  // Split alive players into centered columns for a dramatic flowing layout
+  // Aim for 3 columns on large counts, 2 on smaller, 1 on very small
+  const columnCount = alivePlayers.length > 16 ? 3 : alivePlayers.length > 8 ? 2 : 1;
+  const columns = useMemo(() => {
+    const cols = Array.from({ length: columnCount }, () => []);
+    alivePlayers.forEach((player, i) => {
+      cols[i % columnCount].push({ ...player, globalIndex: i });
+    });
+    return cols;
+  }, [alivePlayers, columnCount]);
+
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: '#0d0d0d' }}>
+    <div className="absolute inset-0 flex flex-col overflow-hidden" style={{
+      background: 'radial-gradient(ellipse at 50% 30%, rgba(20, 5, 5, 1) 0%, rgba(13, 13, 13, 1) 50%, rgba(5, 5, 10, 1) 100%)',
+    }}>
 
-      {/* ─── Top Bar ─────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between px-[2vw] shrink-0"
-        style={{
-          height: '8vh',
-          background: 'linear-gradient(180deg, rgba(13,13,13,1) 0%, rgba(13,13,13,0.95) 100%)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
-        {/* Title */}
-        <h1
-          className="font-bold tracking-[0.15em] uppercase"
-          style={{
-            fontSize: '2vw',
-            color: '#fff',
-            textShadow: '0 0 10px rgba(139,0,0,0.3)',
-          }}
-        >
-          Les Immortels
-        </h1>
+      {/* Atmospheric fog layers */}
+      <div className="fog-layer fog-layer-1" />
+      <div className="fog-layer fog-layer-2" />
+      <div className="fog-layer fog-layer-3" />
 
-        {/* Phase info */}
-        {currentPhase && (
-          <div className="text-center">
-            <span
-              className="font-semibold"
-              style={{
-                fontSize: '1.5vw',
-                color: currentPhase.type === 'night' ? '#6a7fdb' : '#e0a030',
-              }}
-            >
-              {phaseLabel}
-            </span>
-            <span className="text-gray-500 mx-[0.5vw]" style={{ fontSize: '1.2vw' }}>
-              #{phaseNumber}
-            </span>
-          </div>
-        )}
-
-        {/* Alive count */}
-        <div className="text-right">
-          <span className="text-white font-bold" style={{ fontSize: '2vw' }}>
-            {alivePlayers.length}
-          </span>
-          <span className="text-gray-400 ml-[0.5vw]" style={{ fontSize: '1.2vw' }}>
-            en vie
-          </span>
-        </div>
+      {/* Subtle floating particles */}
+      <div className="stars-container" style={{ opacity: 0.4 }}>
+        {particles.map(p => (
+          <div
+            key={p.id}
+            className="star"
+            style={{
+              left: p.left,
+              top: p.top,
+              width: p.size,
+              height: p.size,
+              background: 'rgba(139, 0, 0, 0.6)',
+              '--twinkle-delay': p.delay,
+              '--twinkle-duration': p.duration,
+            }}
+          />
+        ))}
       </div>
 
-      {/* ─── Main Content ────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      {/* ─── Centered Cinematic Content ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center relative z-10">
 
-        {/* Left area (60%): Alive players grid */}
-        <div
-          className="flex flex-col p-[1.5vw]"
-          style={{ width: '62%' }}
-        >
-          <h2
-            className="text-gray-400 font-semibold uppercase tracking-wider mb-[1vh]"
-            style={{ fontSize: '1.2vw' }}
-          >
-            Joueurs en vie
-          </h2>
-
-          <div
-            className="flex-1 grid gap-[0.5vw] content-start"
+        {/* ─── Title & Phase (centered top) ──────────────────────────── */}
+        <div className="flex flex-col items-center pt-[3.5vh]">
+          {/* Game title */}
+          <h1
+            className="font-bold tracking-[0.3em] uppercase animate-pulseGlow"
             style={{
-              gridTemplateColumns: 'repeat(auto-fill, minmax(10vw, 1fr))',
-              gridAutoRows: 'min-content',
+              fontSize: '3vw',
+              color: '#fff',
+              textShadow: '0 0 20px rgba(139, 0, 0, 0.5), 0 0 50px rgba(139, 0, 0, 0.2)',
             }}
           >
-            {alivePlayers.map((player, index) => (
-              <div
-                key={player.id}
-                className="animate-fadeIn flex items-center justify-center text-center"
+            Les Immortels
+          </h1>
+
+          {/* Decorative separator */}
+          <div
+            className="mt-[1vh] mb-[1vh]"
+            style={{
+              width: '25vw',
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, rgba(139, 0, 0, 0.5), transparent)',
+            }}
+          />
+
+          {/* Phase info */}
+          {currentPhase && (
+            <div className="text-center animate-fadeIn mb-[0.5vh]">
+              <span
+                className="font-semibold uppercase tracking-[0.25em]"
                 style={{
-                  animationDelay: `${index * 30}ms`,
-                  animationFillMode: 'both',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '0.4vw',
-                  padding: '0.6vw 0.8vw',
+                  fontSize: '1.3vw',
+                  color: currentPhase.type === 'night' ? '#6a7fdb' : '#e0a030',
+                  textShadow: currentPhase.type === 'night'
+                    ? '0 0 15px rgba(106, 127, 219, 0.4)'
+                    : '0 0 15px rgba(224, 160, 48, 0.4)',
                 }}
               >
-                <span
-                  className="text-white font-medium truncate"
-                  style={{ fontSize: '1.3vw' }}
-                >
-                  {player.name}
-                </span>
+                {phaseLabel}
+              </span>
+              <span className="text-gray-600 mx-[0.5vw]" style={{ fontSize: '1vw' }}>
+                #{phaseNumber}
+              </span>
+            </div>
+          )}
+
+          {/* Alive count — dramatic centered */}
+          <div
+            className="flex items-center gap-[0.5vw] animate-borderGlow"
+            style={{
+              padding: '0.3vw 1.2vw',
+              borderRadius: '0.4vw',
+              border: '1px solid rgba(139, 0, 0, 0.3)',
+              background: 'rgba(139, 0, 0, 0.06)',
+            }}
+          >
+            <span
+              className="text-white font-bold"
+              style={{
+                fontSize: '1.8vw',
+                textShadow: '0 0 10px rgba(255, 255, 255, 0.15)',
+              }}
+            >
+              {alivePlayers.length}
+            </span>
+            <span className="text-gray-500" style={{ fontSize: '1vw' }}>
+              en vie
+            </span>
+          </div>
+        </div>
+
+        {/* ─── Alive Players: Flowing Centered Names ───────────────── */}
+        <div className="flex-1 flex items-center justify-center w-full px-[4vw]">
+          <div
+            className="flex justify-center gap-[3vw]"
+            style={{ maxWidth: '85vw' }}
+          >
+            {columns.map((col, colIndex) => (
+              <div
+                key={colIndex}
+                className="flex flex-col items-center"
+                style={{ gap: '0.8vh' }}
+              >
+                {col.map((player) => (
+                  <div
+                    key={player.id}
+                    className="text-center"
+                    style={{
+                      animation: `cardAppear 0.6s ease-out ${player.globalIndex * 50}ms both, cardFloat ${3.5 + (player.globalIndex % 4) * 0.7}s ease-in-out ${(player.globalIndex % 6) * 0.5}s infinite`,
+                    }}
+                  >
+                    <span
+                      className="font-semibold inline-block"
+                      style={{
+                        fontSize: alivePlayers.length > 20 ? '1.5vw' : alivePlayers.length > 12 ? '1.7vw' : '2vw',
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        textShadow: '0 0 12px rgba(139, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.5)',
+                        letterSpacing: '0.06em',
+                        padding: '0.2vw 0.8vw',
+                        borderBottom: '1px solid rgba(139, 0, 0, 0.12)',
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      {player.name}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Divider */}
-        <div
-          className="shrink-0"
-          style={{
-            width: '1px',
-            background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.1), transparent)',
-          }}
-        />
+        {/* ─── Eliminated: Subtle Ghost Footer ─────────────────────── */}
+        {eliminatedPlayers.length > 0 && (
+          <div className="w-full pb-[2vh] px-[4vw]">
+            {/* Faded separator */}
+            <div
+              className="mx-auto mb-[1.2vh]"
+              style={{
+                width: '40vw',
+                height: '1px',
+                background: 'linear-gradient(90deg, transparent, rgba(45, 106, 79, 0.25), transparent)',
+              }}
+            />
 
-        {/* Right area (40%): Eliminated players */}
-        <div
-          className="flex flex-col p-[1.5vw]"
-          style={{ width: '38%' }}
-        >
-          <h2
-            className="text-gray-400 font-semibold uppercase tracking-wider mb-[1vh]"
-            style={{ fontSize: '1.2vw' }}
-          >
-            Éliminés ({eliminatedPlayers.length})
-          </h2>
+            {/* Ghost section label */}
+            <div className="text-center mb-[0.8vh]">
+              <span
+                className="uppercase tracking-[0.3em] font-semibold"
+                style={{
+                  fontSize: '1.2vw',
+                  color: 'rgba(45, 106, 79, 0.6)',
+                  textShadow: '0 0 8px rgba(45, 106, 79, 0.2)',
+                }}
+              >
+                Cimetiere
+              </span>
+              <span
+                style={{
+                  fontSize: '1vw',
+                  color: 'rgba(255, 255, 255, 0.2)',
+                  marginLeft: '0.4vw',
+                }}
+              >
+                ({eliminatedPlayers.length})
+              </span>
+            </div>
 
-          <div className="flex-1 overflow-hidden">
-            <div className="flex flex-col gap-[0.4vw]">
-              {eliminatedPlayers.length === 0 ? (
-                <p className="text-gray-600 italic" style={{ fontSize: '1.1vw' }}>
-                  Aucun joueur éliminé
-                </p>
-              ) : (
-                eliminatedPlayers.map((player, index) => (
+            {/* Eliminated names — flowing centered line */}
+            <div className="flex flex-wrap justify-center gap-x-[2vw] gap-y-[0.8vh]">
+              {eliminatedPlayers.map((player, index) => {
+                const isWolf = player.role === 'wolf';
+
+                return (
                   <div
                     key={player.id}
-                    className="flex items-center justify-between animate-slideInRight"
+                    className="animate-ghostFade flex items-center gap-[0.3vw]"
                     style={{
-                      animationDelay: `${index * 50}ms`,
+                      animationDelay: `${index * 60}ms`,
                       animationFillMode: 'both',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      borderRadius: '0.3vw',
-                      padding: '0.5vw 0.8vw',
                     }}
                   >
                     <span
-                      className="text-gray-400 font-medium truncate"
-                      style={{ fontSize: '1.2vw' }}
+                      className="font-medium"
+                      style={{
+                        fontSize: '1.3vw',
+                        color: 'rgba(255, 255, 255, 0.35)',
+                        textDecoration: 'line-through',
+                        textDecorationColor: 'rgba(255, 255, 255, 0.1)',
+                        textShadow: '0 0 4px rgba(45, 106, 79, 0.1)',
+                      }}
                     >
                       {player.name}
                     </span>
-
-                    {/* Role badge */}
                     {player.role && (
-                      <div className="flex items-center gap-[0.3vw] shrink-0 ml-[0.5vw]">
-                        <span
-                          className="font-bold uppercase"
-                          style={{
-                            fontSize: '0.9vw',
-                            padding: '0.2vw 0.6vw',
-                            borderRadius: '0.3vw',
-                            background: player.role === 'wolf'
-                              ? 'rgba(139, 0, 0, 0.3)'
-                              : 'rgba(26, 26, 78, 0.3)',
-                            color: player.role === 'wolf'
-                              ? '#ff4444'
-                              : '#6a7fdb',
-                            border: `1px solid ${player.role === 'wolf'
-                              ? 'rgba(139, 0, 0, 0.5)'
-                              : 'rgba(26, 26, 78, 0.5)'}`,
-                          }}
-                        >
-                          {player.role === 'wolf' ? 'LOUP' : 'VILLAGEOIS'}
-                        </span>
-                        {player.special_role && player.special_role !== 'maire' && (
-                          <span
-                            className="font-bold uppercase"
-                            style={{
-                              fontSize: '0.8vw',
-                              padding: '0.2vw 0.5vw',
-                              borderRadius: '0.3vw',
-                              background: 'rgba(168, 85, 247, 0.25)',
-                              color: '#c084fc',
-                              border: '1px solid rgba(168, 85, 247, 0.4)',
-                            }}
-                          >
-                            {player.special_role}
-                          </span>
-                        )}
-                      </div>
+                      <span
+                        className="font-bold uppercase"
+                        style={{
+                          fontSize: '0.9vw',
+                          padding: '0.1vw 0.4vw',
+                          borderRadius: '0.25vw',
+                          background: isWolf
+                            ? 'rgba(139, 0, 0, 0.2)'
+                            : 'rgba(26, 26, 78, 0.2)',
+                          color: isWolf
+                            ? 'rgba(255, 68, 68, 0.6)'
+                            : 'rgba(106, 127, 219, 0.5)',
+                          border: `1px solid ${isWolf
+                            ? 'rgba(139, 0, 0, 0.3)'
+                            : 'rgba(26, 26, 78, 0.3)'}`,
+                        }}
+                      >
+                        {isWolf ? 'LOUP' : 'VILLAGEOIS'}
+                      </span>
+                    )}
+                    {player.special_role && player.special_role !== 'maire' && (
+                      <span
+                        className="font-bold uppercase"
+                        style={{
+                          fontSize: '0.85vw',
+                          padding: '0.1vw 0.35vw',
+                          borderRadius: '0.25vw',
+                          background: 'rgba(168, 85, 247, 0.15)',
+                          color: 'rgba(192, 132, 252, 0.5)',
+                          border: '1px solid rgba(168, 85, 247, 0.2)',
+                        }}
+                      >
+                        {player.special_role}
+                      </span>
                     )}
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Overlay children render on top */}

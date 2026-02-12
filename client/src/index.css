@@ -281,3 +281,106 @@ html {
   animation-delay: var(--twinkle-delay, 0s);
 }
 
+/* ─── GameDisplay Immersive Styles ─────────────────────────────────────── */
+
+/* cardFloat — subtle floating animation for alive player cards */
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* cardAppear — entrance animation for player cards */
+@keyframes cardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ghostFade — entrance for eliminated players */
+@keyframes ghostFade {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+/* borderGlow — subtle glowing border for alive count */
+@keyframes borderGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(139, 0, 0, 0.3), inset 0 0 8px rgba(139, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(139, 0, 0, 0.5), inset 0 0 16px rgba(139, 0, 0, 0.15);
+  }
+}
+
+/* fogDrift — slow drifting motion for fog/mist overlays */
+@keyframes fogDrift {
+  0% { transform: translateX(-5%) translateY(0); opacity: 0.3; }
+  50% { transform: translateX(3%) translateY(-2%); opacity: 0.5; }
+  100% { transform: translateX(-5%) translateY(0); opacity: 0.3; }
+}
+
+@keyframes fogDriftReverse {
+  0% { transform: translateX(5%) translateY(0); opacity: 0.2; }
+  50% { transform: translateX(-3%) translateY(2%); opacity: 0.4; }
+  100% { transform: translateX(5%) translateY(0); opacity: 0.2; }
+}
+
+.animate-cardAppear {
+  animation: cardAppear 0.5s ease-out forwards;
+}
+
+.animate-cardFloat {
+  animation: cardFloat 4s ease-in-out infinite;
+}
+
+.animate-ghostFade {
+  animation: ghostFade 0.6s ease-out forwards;
+}
+
+.animate-borderGlow {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+/* Fog layers for atmospheric depth */
+.fog-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fog-layer-1 {
+  background: radial-gradient(ellipse at 20% 80%, rgba(139, 0, 0, 0.06) 0%, transparent 60%);
+  animation: fogDrift 20s ease-in-out infinite;
+}
+
+.fog-layer-2 {
+  background: radial-gradient(ellipse at 80% 20%, rgba(26, 26, 78, 0.05) 0%, transparent 50%);
+  animation: fogDriftReverse 25s ease-in-out infinite;
+}
+
+.fog-layer-3 {
+  background: radial-gradient(ellipse at 50% 100%, rgba(139, 0, 0, 0.04) 0%, transparent 40%);
+  animation: fogDrift 30s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+/* Skull decorative icon (CSS-only) for eliminated section */
+.skull-icon::before {
+  content: '\2620';
+  font-size: inherit;
+}
+
