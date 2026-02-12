@@ -168,6 +168,17 @@ export function getChallenges() {
   return request('/challenges');
 }
 
+export function displayChallenge(name) {
+  return request('/challenge/display', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function clearChallengeDisplay() {
+  return request('/challenge/display-clear', { method: 'POST' });
+}
+
 // ─── Overrides ──────────────────────────────────────────────────────────────
 
 export function updatePlayer(id, data) {

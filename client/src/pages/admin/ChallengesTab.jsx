@@ -19,6 +19,10 @@ export default function ChallengesTab({ players, refreshPlayers }) {
   const [loading, setLoading] = useState('');
   const [message, setMessage] = useState(null);
 
+  // Challenge display state
+  const [displayName, setDisplayName] = useState('');
+  const [displayActive, setDisplayActive] = useState(false);
+
   useEffect(() => {
     loadChallenges();
   }, []);
@@ -67,6 +71,32 @@ export default function ChallengesTab({ players, refreshPlayers }) {
     setLoading('');
   }
 
+  async function handleDisplayChallenge() {
+    if (!displayName.trim()) return;
+    setLoading('display');
+    try {
+      await api.displayChallenge(displayName.trim());
+      setDisplayActive(true);
+      setMessage({ type: 'success', text: `Épreuve "${displayName.trim()}" affichée sur le dashboard` });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setLoading('');
+  }
+
+  async function handleClearDisplay() {
+    setLoading('clear-display');
+    try {
+      await api.clearChallengeDisplay();
+      setDisplayActive(false);
+      setDisplayName('');
+      setMessage({ type: 'success', text: 'Affichage épreuve retiré' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setLoading('');
+  }
+
   function togglePlayer(id) {
     setSelectedPlayers(prev =>
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -87,6 +117,45 @@ export default function ChallengesTab({ players, refreshPlayers }) {
           <button onClick={() => setMessage(null)} className="ml-2 text-gray-400 hover:text-white">&times;</button>
         </div>
       )}
+
+      {/* Challenge Display on Dashboard */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-yellow-900/50">
+        <h2 className="text-lg font-semibold mb-3 text-yellow-400">Afficher une épreuve sur le dashboard</h2>
+
+        {!displayActive ? (
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleDisplayChallenge()}
+              placeholder="Nom de l'épreuve..."
+              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-600 text-sm"
+            />
+            <button
+              onClick={handleDisplayChallenge}
+              disabled={loading === 'display' || !displayName.trim()}
+              className="px-4 py-2 bg-yellow-700 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 text-sm font-medium whitespace-nowrap"
+            >
+              {loading === 'display' ? 'Envoi...' : 'Afficher'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-400 text-sm font-medium">En cours :</span>
+              <span className="text-white text-sm">{displayName}</span>
+            </div>
+            <button
+              onClick={handleClearDisplay}
+              disabled={loading === 'clear-display'}
+              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 text-sm font-medium"
+            >
+              {loading === 'clear-display' ? 'Retrait...' : 'Retirer l\'affichage'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Create Challenge */}
       <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">

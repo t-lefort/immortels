@@ -29,6 +29,9 @@ export function useDashboardSocket() {
   const [eliminatedPlayer, setEliminatedPlayer] = useState(null);
   const [scoreboard, setScoreboard] = useState(null);
 
+  // Challenge display state
+  const [challengeDisplay, setChallengeDisplay] = useState(null);
+
   // Overlay control
   const [overlay, setOverlay] = useState(null); // 'night' | 'council' | 'result' | 'timer' | 'end' | null
 
@@ -74,6 +77,11 @@ export function useDashboardSocket() {
           startedAt: Date.now(),
         });
       }
+      // Recover challenge display state on reconnect
+      if (data.challengeDisplayName) {
+        setChallengeDisplay({ name: data.challengeDisplayName });
+        setOverlay('challenge');
+      }
     });
 
     // ─── Lobby ──────────────────────────────────────────────────────
@@ -110,6 +118,7 @@ export function useDashboardSocket() {
       setPhaseResult(null);
       setEliminatedPlayer(null);
       setScoreboard(null);
+      setChallengeDisplay(null);
       setOverlay(null);
       setPlayerCount(0);
     });
@@ -206,6 +215,19 @@ export function useDashboardSocket() {
       // Dashboard doesn't show special results
     });
 
+    // ─── Challenge display ──────────────────────────────────────────
+    socket.on('dashboard:challenge', (data) => {
+      if (data.name) {
+        setChallengeDisplay({ name: data.name });
+        setOverlay('challenge');
+      }
+    });
+
+    socket.on('dashboard:challenge_clear', () => {
+      setChallengeDisplay(null);
+      setOverlay(null);
+    });
+
     socketRef.current = socket;
   }, []);
 
@@ -270,6 +292,7 @@ export function useDashboardSocket() {
     phaseResult,
     eliminatedPlayer,
     scoreboard,
+    challengeDisplay,
     overlay,
     setOverlay,
     clearOverlay,

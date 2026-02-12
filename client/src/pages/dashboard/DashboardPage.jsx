@@ -5,7 +5,7 @@ import GameDisplay from './GameDisplay.jsx';
 import NightDisplay from './NightDisplay.jsx';
 import CouncilDisplay from './CouncilDisplay.jsx';
 import ResultDisplay from './ResultDisplay.jsx';
-// ChallengeDisplay is available at ./ChallengeDisplay.jsx for when challenge events are wired
+import ChallengeAnnouncementDisplay from './ChallengeAnnouncementDisplay.jsx';
 import EndDisplay from './EndDisplay.jsx';
 import TimerOverlay from './TimerOverlay.jsx';
 
@@ -27,6 +27,7 @@ export default function DashboardPage() {
     timer,
     phaseResult,
     scoreboard,
+    challengeDisplay,
     overlay,
     setOverlay,
     clearOverlay,
@@ -112,6 +113,13 @@ export default function DashboardPage() {
             <ResultDisplay
               phaseResult={phaseResult}
               onDismiss={handleResultDismiss}
+            />
+          )}
+
+          {/* Challenge announcement overlay */}
+          {overlay === 'challenge' && challengeDisplay && (
+            <ChallengeAnnouncementDisplay
+              challengeName={challengeDisplay.name}
             />
           )}
 

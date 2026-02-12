@@ -274,6 +274,9 @@ function sendDashboardStateSync(socket) {
     }
   }
 
+  // Challenge display state (persisted so reconnect can recover it)
+  const challengeDisplayName = getSetting('challenge_display_name');
+
   socket.emit('state:sync', {
     gameStatus,
     currentPhase,
@@ -282,6 +285,7 @@ function sendDashboardStateSync(socket) {
     voteCount,
     totalExpected,
     timerState,
+    challengeDisplayName: challengeDisplayName || null,
   });
 }
 

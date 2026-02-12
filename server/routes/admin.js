@@ -905,6 +905,36 @@ router.post('/challenge/assign', (req, res) => {
   });
 });
 
+// ─── Challenge Display (Dashboard) ──────────────────────────────────────────
+
+router.post('/challenge/display', (req, res) => {
+  const { name } = req.body;
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'name requis' });
+  }
+
+  const challengeName = String(name).trim();
+  setSetting('challenge_display_name', challengeName);
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:challenge', { name: challengeName });
+  }
+
+  res.json({ displayed: true, name: challengeName });
+});
+
+router.post('/challenge/display-clear', (req, res) => {
+  setSetting('challenge_display_name', null);
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:challenge_clear', {});
+  }
+
+  res.json({ cleared: true });
+});
+
 // ─── Overrides ──────────────────────────────────────────────────────────────
 
 router.put('/player/:id', (req, res) => {
