@@ -2,5 +2,10 @@ node_modules/
 .git/
 data/
 .env
+.env.*
+!.env.example
 *.md
 .DS_Store
+client/dist/
+.vscode/
+.idea/

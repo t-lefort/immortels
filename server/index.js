@@ -17,9 +17,16 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = createServer(app);
+
+// Trust proxy for Cloudflare reverse proxy (correct IP, secure cookies)
+app.set('trust proxy', 1);
+
 const io = new Server(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
+  cors: process.env.NODE_ENV === 'production'
+    ? { origin: true, credentials: true }
+    : { origin: '*' },
 });
 
 const PORT = process.env.PORT || 3000;
@@ -59,6 +66,14 @@ registerSocketHandlers(io);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
+
+  // Serve hashed Vite assets with long-term caching
+  app.use('/assets', express.static(path.join(clientDist, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }));
+
+  // Serve other static files (index.html, favicon, etc.) with no-cache
   app.use(express.static(clientDist));
 
   // SPA fallback — all non-API routes serve index.html

@@ -55,10 +55,14 @@ router.get('/phase/:id', (req, res) => {
 
 /**
  * GET /api/game/health
- * Simple health check.
+ * Health check endpoint for Docker healthcheck and monitoring.
  */
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
 });
 
 export default router;
