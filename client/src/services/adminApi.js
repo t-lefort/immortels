@@ -130,6 +130,17 @@ export function forceSpecialPower(params) {
   });
 }
 
+export function getSpecialRolesStatus() {
+  return request('/special/status');
+}
+
+export function skipSpecialPower(power) {
+  return request('/special/skip', {
+    method: 'POST',
+    body: JSON.stringify({ power }),
+  });
+}
+
 // ─── Challenges ─────────────────────────────────────────────────────────────
 
 export function createChallenge(data) {

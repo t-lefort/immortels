@@ -11,6 +11,13 @@ import {
   emitToAll,
   computeVoteCounts,
 } from '../socket-rooms.js';
+import {
+  processProtecteurResponse,
+  processSorciereResponse,
+  processVoyanteResponse,
+  processChasseurResponse,
+  processMayorSuccession,
+} from '../special-roles.js';
 
 const router = Router();
 
@@ -303,6 +310,97 @@ router.get('/wolves', requirePlayer, (req, res) => {
     .all();
 
   res.json({ wolves });
+});
+
+/**
+ * POST /api/player/special-respond
+ * Player responds to a special role prompt.
+ * Body: { type, response } where response varies by type:
+ *   protecteur: { targetId }
+ *   sorciere: { resurrect: true/false }
+ *   voyante: { targetId }
+ *   chasseur: { targetId }
+ *   mayor_succession: { targetId }
+ */
+router.post('/special-respond', requirePlayer, (req, res) => {
+  const { type, response } = req.body;
+  const player = req.player;
+
+  if (!type || !response) {
+    return res.status(400).json({ error: 'type et response requis.' });
+  }
+
+  const io = req.app.get('io');
+  const currentPhase = getCurrentPhase();
+  const phaseId = currentPhase?.id || null;
+
+  try {
+    let result;
+
+    switch (type) {
+      case 'protecteur': {
+        if (!response.targetId) {
+          return res.status(400).json({ error: 'targetId requis.' });
+        }
+        // Verify the responding player is the protector
+        if (player.special_role !== 'protecteur') {
+          return res.status(403).json({ error: 'Vous n\'êtes pas le protecteur.' });
+        }
+        result = processProtecteurResponse(io, Number(response.targetId));
+        break;
+      }
+      case 'sorciere': {
+        // Verify the responding player is the witch
+        if (player.special_role !== 'sorciere') {
+          return res.status(403).json({ error: 'Vous n\'êtes pas la sorcière.' });
+        }
+        const victimIdStr = getSetting('sorciere_victim_id');
+        const victimId = victimIdStr ? Number(victimIdStr) : null;
+        result = processSorciereResponse(io, !!response.resurrect, victimId);
+        break;
+      }
+      case 'voyante': {
+        if (!response.targetId) {
+          return res.status(400).json({ error: 'targetId requis.' });
+        }
+        // Verify the responding player is the seer
+        if (player.special_role !== 'voyante') {
+          return res.status(403).json({ error: 'Vous n\'êtes pas la voyante.' });
+        }
+        result = processVoyanteResponse(io, Number(response.targetId));
+        break;
+      }
+      case 'chasseur': {
+        if (!response.targetId) {
+          return res.status(400).json({ error: 'targetId requis.' });
+        }
+        // Verify the responding player is the hunter
+        if (player.special_role !== 'chasseur') {
+          return res.status(403).json({ error: 'Vous n\'êtes pas le chasseur.' });
+        }
+        result = processChasseurResponse(io, Number(response.targetId), phaseId);
+        break;
+      }
+      case 'mayor_succession': {
+        if (!response.targetId) {
+          return res.status(400).json({ error: 'targetId requis.' });
+        }
+        // Verify the responding player is the current mayor
+        const mayorIdStr = getSetting('mayor_id');
+        if (!mayorIdStr || Number(mayorIdStr) !== player.id) {
+          return res.status(403).json({ error: 'Vous n\'êtes pas le maire.' });
+        }
+        result = processMayorSuccession(io, Number(response.targetId));
+        break;
+      }
+      default:
+        return res.status(400).json({ error: `Type de pouvoir inconnu: ${type}` });
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 /**

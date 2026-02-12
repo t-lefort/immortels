@@ -11,6 +11,11 @@ import VillageCouncilVote from './VillageCouncilVote.jsx';
 import PhaseResultScreen from './PhaseResultScreen.jsx';
 import EliminatedScreen from './EliminatedScreen.jsx';
 import GameEndScreen from './GameEndScreen.jsx';
+import ProtecteurPrompt from './ProtecteurPrompt.jsx';
+import SorcierePrompt from './SorcierePrompt.jsx';
+import VoyantePrompt from './VoyantePrompt.jsx';
+import ChasseurPrompt from './ChasseurPrompt.jsx';
+import MayorSuccessionPrompt from './MayorSuccessionPrompt.jsx';
 
 /**
  * Main player page — state machine router.
@@ -27,6 +32,7 @@ export default function PlayerPage() {
     gameStatus,
     currentPhase,
     phaseResult,
+    specialPrompt,
   } = usePlayer();
 
   // Track if the player has seen the "eliminated" screen this session
@@ -77,6 +83,27 @@ export default function PlayerPage() {
     );
   }
 
+  // ─── Special prompt overlay ────────────────────────────────────────────────
+  // Renders on top of whatever screen is currently showing
+  function renderSpecialPrompt() {
+    if (!specialPrompt || !specialPrompt.power) return null;
+
+    switch (specialPrompt.power) {
+      case 'protecteur':
+        return <ProtecteurPrompt />;
+      case 'sorciere':
+        return <SorcierePrompt />;
+      case 'voyante':
+        return <VoyantePrompt />;
+      case 'chasseur':
+        return <ChasseurPrompt />;
+      case 'mayor_succession':
+        return <MayorSuccessionPrompt />;
+      default:
+        return null;
+    }
+  }
+
   // ─── Not logged in ──────────────────────────────────────────────────────────
   if (!player) {
     return <LoginScreen />;
@@ -84,7 +111,12 @@ export default function PlayerPage() {
 
   // ─── Game finished ──────────────────────────────────────────────────────────
   if (gameStatus === 'finished') {
-    return <GameEndScreen />;
+    return (
+      <>
+        <GameEndScreen />
+        {renderSpecialPrompt()}
+      </>
+    );
   }
 
   // ─── Setup / Lobby ──────────────────────────────────────────────────────────
@@ -102,6 +134,7 @@ export default function PlayerPage() {
         {/* RoleRevealScreen is a fixed overlay; when dismissed it returns null
             and the effect above will pick up the localStorage change */}
         <WaitingScreen />
+        {renderSpecialPrompt()}
       </>
     );
   }
@@ -109,18 +142,26 @@ export default function PlayerPage() {
   // Show eliminated transition if player just became a ghost
   if (player.status === 'ghost' && !eliminatedAcknowledged) {
     return (
-      <EliminatedScreen
-        onContinue={() => {
-          setEliminatedAcknowledged(true);
-          localStorage.setItem(`ghost_ack_${player.id}`, '1');
-        }}
-      />
+      <>
+        <EliminatedScreen
+          onContinue={() => {
+            setEliminatedAcknowledged(true);
+            localStorage.setItem(`ghost_ack_${player.id}`, '1');
+          }}
+        />
+        {renderSpecialPrompt()}
+      </>
     );
   }
 
   // Show phase result if available (between phases)
   if (phaseResult) {
-    return <PhaseResultScreen />;
+    return (
+      <>
+        <PhaseResultScreen />
+        {renderSpecialPrompt()}
+      </>
+    );
   }
 
   // ─── Active phase routing ─────────────────────────────────────────────────
@@ -130,27 +171,57 @@ export default function PlayerPage() {
     if (currentPhase.type === 'night') {
       // Ghost players
       if (player.status === 'ghost') {
-        return <NightGhostVote />;
+        return (
+          <>
+            <NightGhostVote />
+            {renderSpecialPrompt()}
+          </>
+        );
       }
       // Wolf players
       if (player.role === 'wolf') {
-        return <NightWolfVote />;
+        return (
+          <>
+            <NightWolfVote />
+            {renderSpecialPrompt()}
+          </>
+        );
       }
       // Villager players
-      return <NightVillagerGuess />;
+      return (
+        <>
+          <NightVillagerGuess />
+          {renderSpecialPrompt()}
+        </>
+      );
     }
 
     // Village council phase
     if (currentPhase.type === 'village_council') {
       // Only alive players vote at council
       if (player.status === 'alive') {
-        return <VillageCouncilVote />;
+        return (
+          <>
+            <VillageCouncilVote />
+            {renderSpecialPrompt()}
+          </>
+        );
       }
       // Ghosts just wait during council
-      return <WaitingScreen />;
+      return (
+        <>
+          <WaitingScreen />
+          {renderSpecialPrompt()}
+        </>
+      );
     }
   }
 
   // ─── Default: waiting ─────────────────────────────────────────────────────
-  return <WaitingScreen />;
+  return (
+    <>
+      <WaitingScreen />
+      {renderSpecialPrompt()}
+    </>
+  );
 }

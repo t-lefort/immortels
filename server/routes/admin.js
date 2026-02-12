@@ -32,6 +32,22 @@ import {
   updatePlayerRooms,
 } from '../socket-rooms.js';
 import { resyncPlayer } from '../socket-handlers.js';
+import {
+  handleProtecteur,
+  processProtecteurResponse,
+  handleSorciere,
+  processSorciereResponse,
+  handleVoyante,
+  processVoyanteResponse,
+  handleChasseur,
+  processChasseurResponse,
+  handleMayorSuccession,
+  processMayorSuccession,
+  forceMayorSuccession,
+  handleImmunite,
+  getSpecialRolesStatus,
+  getMayorInfo,
+} from '../special-roles.js';
 
 const router = Router();
 
@@ -341,10 +357,19 @@ router.post('/phase/reveal', (req, res) => {
   const io = req.app.get('io');
   const eliminated = [];
 
+  const immuneApplied = [];
+
   // Apply eliminations if provided
   if (victims && Array.isArray(victims)) {
     for (const victim of victims) {
       try {
+        // Check immunity before eliminating
+        const immuneResult = handleImmunite(Number(phaseId), victim.playerId);
+        if (immuneResult.applied) {
+          immuneApplied.push({ playerId: victim.playerId, playerName: immuneResult.playerName });
+          continue; // Skip elimination — player is immune
+        }
+
         const player = eliminatePlayer(victim.playerId, Number(phaseId), victim.eliminatedBy);
         eliminated.push(player);
 
@@ -397,17 +422,7 @@ router.post('/phase/reveal', (req, res) => {
     // Check if hunter was eliminated — trigger hunter power
     for (const p of eliminated) {
       if (p.special_role === 'chasseur') {
-        setSetting('hunter_pending', '1');
-        emitToPlayer(io, p.id, 'special:prompt', {
-          power: 'chasseur',
-          playerId: p.id,
-          playerName: p.name,
-        });
-        emitToAdmin(io, 'special:prompt', {
-          power: 'chasseur',
-          playerId: p.id,
-          playerName: p.name,
-        });
+        handleChasseur(io, p.id);
       }
     }
 
@@ -417,16 +432,7 @@ router.post('/phase/reveal', (req, res) => {
       const mayorId = Number(mayorIdStr);
       const eliminatedMayor = eliminated.find(p => p.id === mayorId);
       if (eliminatedMayor) {
-        emitToPlayer(io, mayorId, 'special:prompt', {
-          power: 'mayor_succession',
-          playerId: mayorId,
-          playerName: eliminatedMayor.name,
-        });
-        emitToAdmin(io, 'special:prompt', {
-          power: 'mayor_succession',
-          playerId: mayorId,
-          playerName: eliminatedMayor.name,
-        });
+        handleMayorSuccession(io, mayorId);
       }
     }
   }
@@ -434,7 +440,7 @@ router.post('/phase/reveal', (req, res) => {
   // Clear current phase
   setSetting('current_phase_id', null);
 
-  res.json({ phase, eliminated, scoreChanges });
+  res.json({ phase, eliminated, scoreChanges, immuneApplied });
 });
 
 router.post('/phase/skip', (req, res) => {
@@ -523,154 +529,124 @@ router.post('/timer/start', (req, res) => {
 // ─── Special powers ─────────────────────────────────────────────────────────
 
 router.post('/special/trigger', (req, res) => {
-  const { playerId, power } = req.body;
-  if (!playerId || !power) {
-    return res.status(400).json({ error: 'playerId et power requis' });
-  }
-
-  const db = getDb();
-  const player = db.prepare('SELECT * FROM players WHERE id = ?').get(Number(playerId));
-  if (!player) {
-    return res.status(404).json({ error: 'Joueur introuvable' });
-  }
-
-  const io = req.app.get('io');
-  if (io) {
-    emitToPlayer(io, player.id, 'special:prompt', {
-      power,
-      playerId: player.id,
-      playerName: player.name,
-    });
-  }
-
-  res.json({ triggered: true, power, playerId: player.id });
-});
-
-router.post('/special/force', (req, res) => {
-  const { power, playerId, targetId, decision } = req.body;
+  const { playerId, power, phaseId, victimId } = req.body;
   if (!power) {
     return res.status(400).json({ error: 'power requis' });
   }
 
-  const db = getDb();
+  const io = req.app.get('io');
+  const currentPhase = getCurrentPhase();
+  const effectivePhaseId = phaseId ? Number(phaseId) : (currentPhase?.id || null);
+
+  try {
+    let result;
+
+    switch (power) {
+      case 'protecteur':
+        result = handleProtecteur(io, effectivePhaseId);
+        break;
+
+      case 'sorciere':
+        if (!victimId) {
+          return res.status(400).json({ error: 'victimId requis pour la sorcière' });
+        }
+        result = handleSorciere(io, effectivePhaseId, Number(victimId));
+        break;
+
+      case 'voyante':
+        result = handleVoyante(io, effectivePhaseId);
+        break;
+
+      case 'chasseur':
+        if (!playerId) {
+          return res.status(400).json({ error: 'playerId requis pour le chasseur' });
+        }
+        result = handleChasseur(io, Number(playerId));
+        break;
+
+      case 'mayor_succession':
+        if (!playerId) {
+          return res.status(400).json({ error: 'playerId requis pour la succession du maire' });
+        }
+        result = handleMayorSuccession(io, Number(playerId));
+        break;
+
+      default: {
+        // Fallback: generic trigger (send prompt directly to player)
+        if (!playerId) {
+          return res.status(400).json({ error: 'playerId requis' });
+        }
+        const db = getDb();
+        const player = db.prepare('SELECT * FROM players WHERE id = ?').get(Number(playerId));
+        if (!player) {
+          return res.status(404).json({ error: 'Joueur introuvable' });
+        }
+
+        if (io) {
+          emitToPlayer(io, player.id, 'special:prompt', {
+            power,
+            playerId: player.id,
+            playerName: player.name,
+          });
+        }
+
+        result = { triggered: true, power, playerId: player.id };
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/special/force', (req, res) => {
+  const { power, playerId, targetId, decision, phaseId } = req.body;
+  if (!power) {
+    return res.status(400).json({ error: 'power requis' });
+  }
+
   const io = req.app.get('io');
 
   try {
     switch (power) {
       case 'protecteur': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
-        protectPlayer(Number(targetId));
-
-        if (io && playerId) {
-          emitToPlayer(io, playerId, 'special:result', {
-            power: 'protecteur',
-            targetId: Number(targetId),
-          });
-        }
-
-        res.json({ applied: true, power, targetId });
+        const result = processProtecteurResponse(io, Number(targetId));
+        res.json({ applied: true, power, ...result });
         break;
       }
       case 'sorciere': {
-        if (decision === 'resurrect' && targetId) {
-          const player = resurrectPlayer(Number(targetId));
+        const victimIdStr = getSetting('sorciere_victim_id');
+        const effectiveVictimId = targetId || (victimIdStr ? Number(victimIdStr) : null);
 
-          // Update room membership: player is alive again
-          if (io) {
-            updatePlayerRooms(io, Number(targetId), 'alive');
-          }
-
-          if (io && playerId) {
-            emitToPlayer(io, playerId, 'special:result', {
-              power: 'sorciere',
-              action: 'resurrect',
-              target: { id: player.id, name: player.name },
-            });
-          }
-
-          res.json({ applied: true, power, action: 'resurrect', player });
+        if (decision === 'resurrect' && effectiveVictimId) {
+          const result = processSorciereResponse(io, true, effectiveVictimId);
+          res.json({ applied: true, power, ...result });
         } else {
-          setSetting('witch_used', '1');
-
-          if (io && playerId) {
-            emitToPlayer(io, playerId, 'special:result', {
-              power: 'sorciere',
-              action: 'skip',
-            });
-          }
-
-          res.json({ applied: true, power, action: 'skip' });
+          const result = processSorciereResponse(io, false, effectiveVictimId);
+          res.json({ applied: true, power, ...result });
         }
         break;
       }
       case 'voyante': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
-        const target = db.prepare('SELECT id, name, role FROM players WHERE id = ?').get(Number(targetId));
-        if (!target) return res.status(404).json({ error: 'Cible introuvable' });
-
-        const remaining = Number(getSetting('seer_uses_remaining') || '0');
-        if (remaining > 0) {
-          setSetting('seer_uses_remaining', String(remaining - 1));
-        }
-
-        // Send result to voyante
-        if (io && playerId) {
-          emitToPlayer(io, playerId, 'special:result', {
-            power: 'voyante',
-            target: { id: target.id, name: target.name, role: target.role },
-          });
-        }
-
-        res.json({ applied: true, power, target: { id: target.id, name: target.name, role: target.role } });
+        const result = processVoyanteResponse(io, Number(targetId));
+        res.json({ applied: true, power, ...result });
         break;
       }
       case 'chasseur': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
         const currentPhase = getCurrentPhase();
-        const phaseId = currentPhase ? currentPhase.id : null;
-        const victim = eliminatePlayer(Number(targetId), phaseId, 'chasseur');
-
-        setSetting('hunter_pending', '0');
-
-        // Update room membership: victim becomes ghost
-        if (io) {
-          updatePlayerRooms(io, Number(targetId), 'ghost');
-
-          // Broadcast elimination to all
-          emitToAll(io, 'player:eliminated', {
-            player: { id: victim.id, name: victim.name, role: victim.role },
-            eliminatedBy: 'chasseur',
-          });
-
-          // Notify the specific victim
-          emitToPlayer(io, victim.id, 'player:eliminated', {
-            playerId: victim.id,
-          });
-
-          // Send result to hunter
-          if (playerId) {
-            emitToPlayer(io, playerId, 'special:result', {
-              power: 'chasseur',
-              victim: { id: victim.id, name: victim.name },
-            });
-          }
-        }
-
-        res.json({ applied: true, power, victim });
+        const effectivePhaseId = phaseId ? Number(phaseId) : (currentPhase?.id || null);
+        const result = processChasseurResponse(io, Number(targetId), effectivePhaseId);
+        res.json({ applied: true, power, ...result });
         break;
       }
       case 'mayor_succession': {
         if (!targetId) return res.status(400).json({ error: 'targetId requis' });
-        setSetting('mayor_id', String(targetId));
-
-        if (io && playerId) {
-          emitToPlayer(io, playerId, 'special:result', {
-            power: 'mayor_succession',
-            newMayorId: Number(targetId),
-          });
-        }
-
-        res.json({ applied: true, power, newMayorId: Number(targetId) });
+        const result = forceMayorSuccession(io, Number(targetId));
+        res.json({ applied: true, power, ...result });
         break;
       }
       default:
@@ -679,6 +655,58 @@ router.post('/special/force', (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+router.get('/special/status', (req, res) => {
+  try {
+    const status = getSpecialRolesStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/special/skip', (req, res) => {
+  const { power } = req.body;
+  if (!power) {
+    return res.status(400).json({ error: 'power requis' });
+  }
+
+  const io = req.app.get('io');
+
+  switch (power) {
+    case 'protecteur':
+      setSetting('protecteur_pending', '0');
+      clearProtection();
+      break;
+    case 'sorciere':
+      setSetting('sorciere_pending', '0');
+      setSetting('sorciere_victim_id', null);
+      break;
+    case 'voyante':
+      setSetting('voyante_pending', '0');
+      break;
+    case 'chasseur':
+      setSetting('hunter_pending', '0');
+      setSetting('hunter_player_id', null);
+      break;
+    case 'mayor_succession':
+      setSetting('mayor_succession_pending', '0');
+      // Mayor position stays vacant
+      setSetting('mayor_id', null);
+      break;
+    default:
+      return res.status(400).json({ error: `Pouvoir inconnu: ${power}` });
+  }
+
+  if (io) {
+    emitToAdmin(io, 'special:result', {
+      power,
+      action: 'skipped',
+    });
+  }
+
+  res.json({ skipped: true, power });
 });
 
 // ─── Challenges ─────────────────────────────────────────────────────────────

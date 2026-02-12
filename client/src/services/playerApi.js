@@ -62,6 +62,15 @@ export function submitGhostIdentification(targetIds) {
   });
 }
 
+// ─── Special Powers ─────────────────────────────────────────────────────────
+
+export function submitSpecialResponse(type, response) {
+  return request(`${PLAYER_BASE}/special-respond`, {
+    method: 'POST',
+    body: JSON.stringify({ type, response }),
+  });
+}
+
 // ─── Wolf Info ───────────────────────────────────────────────────────────────
 
 export function getWolves() {

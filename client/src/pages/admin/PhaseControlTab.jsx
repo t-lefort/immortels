@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../../services/adminApi.js';
+import SpecialRolesPanel from './SpecialRolesPanel.jsx';
 
 export default function PhaseControlTab({ players, refreshPlayers, gameStatus, currentPhase, setCurrentPhase }) {
   const [loading, setLoading] = useState('');
@@ -304,6 +305,11 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
             </div>
           )}
         </div>
+      )}
+
+      {/* Special Roles Panel */}
+      {currentPhase && (
+        <SpecialRolesPanel players={players} currentPhase={currentPhase} />
       )}
 
       {/* Vote Details */}

@@ -146,6 +146,18 @@ export function PlayerProvider({ children }) {
     }
   }, []);
 
+  const submitSpecialResponse = useCallback(async (type, response) => {
+    try {
+      const result = await playerApi.submitSpecialResponse(type, response);
+      // Clear the prompt after successful response
+      setSpecialPrompt(null);
+      return result;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
   const fetchWolves = useCallback(async () => {
     try {
       const data = await playerApi.getWolves();
@@ -360,6 +372,7 @@ export function PlayerProvider({ children }) {
     vote,
     villagerGuess,
     ghostIdentify,
+    submitSpecialResponse,
     fetchWolves,
     clearError,
     clearPhaseResult,

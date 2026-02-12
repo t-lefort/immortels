@@ -125,6 +125,12 @@ function initDefaultSettings() {
     seer_uses_remaining: '2',
     mayor_id: null,
     hunter_pending: '0',
+    hunter_player_id: null,
+    protecteur_pending: '0',
+    sorciere_pending: '0',
+    sorciere_victim_id: null,
+    voyante_pending: '0',
+    mayor_succession_pending: '0',
   };
 
   const insert = db.prepare(
