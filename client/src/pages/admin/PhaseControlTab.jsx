@@ -228,7 +228,7 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
                 Lancer la phase
               </button>
             )}
-            {currentPhase.status === 'active' && (
+            {currentPhase.status === 'active' && currentPhase.type !== 'night' && (
               <button
                 onClick={handleOpenVoting}
                 disabled={!!loading}

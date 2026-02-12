@@ -309,6 +309,18 @@ router.post('/phase/start', (req, res) => {
       emitToAdmin(io, 'phase:started', { phase, phaseType: phase.type });
     }
 
+    // For night phases, automatically open voting (no separate step needed)
+    if (phase.type === 'night') {
+      const votingPhase = openVoting(phase.id);
+      logger.phase('Voting auto-opened for night phase', { phaseId: votingPhase.id });
+
+      if (io) {
+        emitToAll(io, 'phase:voting_opened', { phase: votingPhase, phaseId: votingPhase.id });
+      }
+
+      return res.json(votingPhase);
+    }
+
     res.json(phase);
   } catch (err) {
     res.status(400).json({ error: err.message });
