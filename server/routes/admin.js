@@ -581,6 +581,20 @@ router.post('/phase/speech-order', (req, res) => {
   res.json({ order });
 });
 
+router.post('/phase/broadcast-speech-order', (req, res) => {
+  const { order } = req.body;
+  if (!order || !Array.isArray(order) || order.length === 0) {
+    return res.status(400).json({ error: 'order (tableau) requis' });
+  }
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:speech_order', { order });
+  }
+
+  res.json({ broadcast: true });
+});
+
 router.post('/timer/start', (req, res) => {
   const { duration } = req.body;
   if (!duration || typeof duration !== 'number' || duration <= 0) {

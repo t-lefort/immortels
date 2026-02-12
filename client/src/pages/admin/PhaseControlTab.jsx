@@ -141,6 +141,18 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
     setLoading('');
   }
 
+  async function handleBroadcastSpeechOrder() {
+    if (!speechOrder) return;
+    setLoading('broadcast');
+    try {
+      await api.broadcastSpeechOrder(speechOrder);
+      setMessage({ type: 'success', text: 'Ordre de parole envoyé au dashboard' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setLoading('');
+  }
+
   async function handleStartTimer() {
     try {
       await api.startTimer(timerDuration);
@@ -294,7 +306,16 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
 
               {speechOrder && (
                 <div className="bg-gray-800 rounded-lg p-3">
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">Ordre de parole :</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-400">Ordre de parole :</h3>
+                    <button
+                      onClick={handleBroadcastSpeechOrder}
+                      disabled={!!loading}
+                      className="px-3 py-1 bg-yellow-800 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-xs font-medium"
+                    >
+                      {loading === 'broadcast' ? 'Envoi...' : 'Afficher sur le dashboard'}
+                    </button>
+                  </div>
                   <ol className="list-decimal list-inside text-sm space-y-1">
                     {speechOrder.map((p, i) => (
                       <li key={p.id} className="text-gray-200">{p.name}</li>

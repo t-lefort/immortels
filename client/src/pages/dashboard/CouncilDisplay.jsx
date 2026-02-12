@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
  * Shows speech order with current speaker highlighted + countdown,
  * or 10-minute free debate timer, or vote progress during voting.
  */
-export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteProgress, players }) {
+export default function CouncilDisplay({ currentPhase, speechOrder, dashboardSpeechOrder, timer, voteProgress, players }) {
   const alivePlayers = players.filter(p => p.status === 'alive');
   const isSmallGroup = alivePlayers.length <= 10;
   const isVoting = currentPhase?.status === 'voting';
@@ -135,6 +135,61 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
                 }}
               />
             </div>
+          </div>
+        </div>
+      ) : dashboardSpeechOrder && dashboardSpeechOrder.length > 0 ? (
+        /* ─── Broadcast speech order (sent by admin) ──────────────── */
+        <div className="flex-1 flex flex-col items-center px-[3vw] w-full overflow-hidden">
+          <h2
+            className="text-gray-300 font-medium mb-[2vh]"
+            style={{ fontSize: '1.8vw' }}
+          >
+            Ordre de parole
+          </h2>
+
+          <div
+            className="flex-1 w-full flex flex-col gap-[0.8vh] overflow-hidden"
+            style={{ maxWidth: '60vw' }}
+          >
+            {dashboardSpeechOrder.map((speaker, index) => (
+              <div
+                key={speaker.id}
+                className="flex items-center gap-[1vw] animate-slideInLeft"
+                style={{
+                  animationDelay: `${index * 80}ms`,
+                  animationFillMode: 'both',
+                  padding: '0.8vw 1.5vw',
+                  borderRadius: '0.4vw',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(224, 160, 48, 0.15)',
+                }}
+              >
+                {/* Number */}
+                <span
+                  className="font-bold shrink-0"
+                  style={{
+                    fontSize: '1.8vw',
+                    color: '#e0a030',
+                    width: '2.5vw',
+                    textAlign: 'right',
+                  }}
+                >
+                  {index + 1}.
+                </span>
+
+                {/* Name */}
+                <span
+                  className="font-medium truncate"
+                  style={{
+                    fontSize: '2vw',
+                    color: '#fff',
+                    textShadow: '0 0 8px rgba(224, 160, 48, 0.15)',
+                  }}
+                >
+                  {speaker.name}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       ) : isSmallGroup ? (
