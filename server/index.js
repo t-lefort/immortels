@@ -123,11 +123,34 @@ process.on('uncaughtException', (err) => {
   shutdown();
 });
 
-// ─── Start server ───────────────────────────────────────────────────────────
+// ─── Track connections for fast shutdown ────────────────────────────────────
 
-server.listen(PORT, () => {
-  console.log(`[SERVER] Les Immortels running on http://localhost:${PORT}`);
+const connections = new Set();
+
+server.on('connection', (conn) => {
+  connections.add(conn);
+  conn.on('close', () => connections.delete(conn));
 });
+
+// ─── Start server (with EADDRINUSE retry for node --watch restarts) ─────────
+
+function startServer(retries = 10, delay = 300) {
+  server.once('error', (err) => {
+    if (err.code === 'EADDRINUSE' && retries > 0) {
+      console.warn(`[SERVER] Port ${PORT} in use, retrying in ${delay}ms... (${retries} retries left)`);
+      setTimeout(() => startServer(retries - 1, delay), delay);
+    } else {
+      console.error(`[SERVER] Failed to start:`, err.message);
+      process.exit(1);
+    }
+  });
+
+  server.listen(PORT, () => {
+    console.log(`[SERVER] Les Immortels running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
@@ -139,11 +162,11 @@ function shutdown() {
 
   console.log('[SERVER] Shutting down gracefully...');
 
-  // Force exit after 5 seconds if graceful shutdown hangs
+  // Force exit after 3 seconds if graceful shutdown hangs
   const forceExitTimeout = setTimeout(() => {
     console.error('[SERVER] Forced shutdown after timeout');
     process.exit(1);
-  }, 5000);
+  }, 3000);
   // Allow the process to exit naturally if everything closes in time
   forceExitTimeout.unref();
 
@@ -151,6 +174,12 @@ function shutdown() {
   io.close(() => {
     console.log('[SERVER] Socket.IO connections closed');
   });
+
+  // Destroy all active connections so server.close() resolves immediately
+  // This is critical for node --watch restarts to free the port fast
+  for (const conn of connections) {
+    conn.destroy();
+  }
 
   // Close HTTP server (stop accepting new connections)
   server.close(() => {
