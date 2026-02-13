@@ -172,6 +172,10 @@ export function clearChallengeDisplay() {
   return request('/challenge/display-clear', { method: 'POST' });
 }
 
+export function dismissVoteReveal() {
+  return request('/vote-reveal/dismiss', { method: 'POST' });
+}
+
 // ─── Overrides ──────────────────────────────────────────────────────────────
 
 export function updatePlayer(id, data) {

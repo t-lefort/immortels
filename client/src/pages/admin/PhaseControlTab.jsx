@@ -2,6 +2,48 @@ import { useState, useEffect, useCallback } from 'react';
 import * as api from '../../services/adminApi.js';
 import SpecialRolesPanel from './SpecialRolesPanel.jsx';
 
+/**
+ * Small panel to dismiss the post-council vote reveal on the dashboard.
+ * Shown when no phase is active (i.e., after a reveal).
+ */
+function DismissVoteRevealButton() {
+  const [loading, setLoading] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  async function handleDismiss() {
+    setLoading(true);
+    try {
+      await api.dismissVoteReveal();
+      setDismissed(true);
+    } catch (err) {
+      console.warn('Could not dismiss vote reveal:', err.message);
+    }
+    setLoading(false);
+  }
+
+  if (dismissed) return null;
+
+  return (
+    <div className="bg-gray-900 rounded-lg p-4 border border-yellow-900/50">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium text-yellow-300">Affichage des votes</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            Le dashboard affiche le détail des votes du conseil.
+          </p>
+        </div>
+        <button
+          onClick={handleDismiss}
+          disabled={loading}
+          className="px-4 py-2 bg-yellow-800 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-sm font-medium"
+        >
+          {loading ? 'Fermeture...' : 'Fermer l\'affichage'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PhaseControlTab({ players, refreshPlayers, gameStatus, currentPhase, setCurrentPhase }) {
   const [loading, setLoading] = useState('');
   const [message, setMessage] = useState(null);
@@ -9,6 +51,7 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
   const [voteDetails, setVoteDetails] = useState(null);
   const [speechOrder, setSpeechOrder] = useState(null);
   const [timerDuration, setTimerDuration] = useState(60);
+  const [showVoteRevealDismiss, setShowVoteRevealDismiss] = useState(false);
 
   const alivePlayers = players.filter(p => p.status === 'alive');
   const isInProgress = gameStatus === 'in_progress';
@@ -44,6 +87,7 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
     setResults(null);
     setVoteDetails(null);
     setSpeechOrder(null);
+    setShowVoteRevealDismiss(false);
     try {
       const phase = await api.createPhase(type);
       setCurrentPhase(phase);
@@ -96,6 +140,7 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
     if (!currentPhase) return;
     if (!confirm(`Révéler les résultats${victims.length > 0 ? ` (${victims.length} victime(s))` : ''} ?`)) return;
 
+    const wasCouncil = currentPhase.type === 'village_council';
     setLoading('reveal');
     try {
       const data = await api.revealPhase(currentPhase.id, victims);
@@ -103,6 +148,10 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
       setResults(null);
       setVoteDetails(null);
       refreshPlayers();
+      // Show vote reveal dismiss button for council phases
+      if (wasCouncil) {
+        setShowVoteRevealDismiss(true);
+      }
       setMessage({
         type: 'success',
         text: `Résultats révélés. ${data.eliminated.length} éliminé(s). ${data.scoreChanges.length} changements de score.`,
@@ -175,6 +224,11 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
           {message.text}
           <button onClick={() => setMessage(null)} className="ml-2 text-gray-400 hover:text-white">&times;</button>
         </div>
+      )}
+
+      {/* Vote reveal dismiss (after council reveal) */}
+      {!currentPhase && showVoteRevealDismiss && (
+        <DismissVoteRevealButton />
       )}
 
       {/* Phase Creation */}

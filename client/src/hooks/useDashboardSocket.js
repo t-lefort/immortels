@@ -32,6 +32,9 @@ export function useDashboardSocket() {
   // Challenge display state
   const [challengeDisplay, setChallengeDisplay] = useState(null);
 
+  // Council vote reveal data (who voted for whom)
+  const [councilVotes, setCouncilVotes] = useState(null);
+
   // Overlay control
   const [overlay, setOverlay] = useState(null); // 'night' | 'council' | 'result' | 'timer' | 'end' | null
 
@@ -119,6 +122,7 @@ export function useDashboardSocket() {
       setScoreboard(null);
       setWinner(null);
       setChallengeDisplay(null);
+      setCouncilVotes(null);
       setOverlay(null);
       setPlayerCount(0);
     });
@@ -177,6 +181,12 @@ export function useDashboardSocket() {
           return p;
         }));
       }
+      // Store council votes if present (for vote reveal after result display)
+      if (data.councilVotes && data.councilVotes.length > 0) {
+        setCouncilVotes(data.councilVotes);
+      } else {
+        setCouncilVotes(null);
+      }
       setOverlay('result');
     });
 
@@ -220,6 +230,12 @@ export function useDashboardSocket() {
 
     socket.on('dashboard:challenge_clear', () => {
       setChallengeDisplay(null);
+      setOverlay(null);
+    });
+
+    // ─── Vote reveal dismiss ─────────────────────────────────────────
+    socket.on('dashboard:vote_reveal_dismiss', () => {
+      setCouncilVotes(null);
       setOverlay(null);
     });
 
@@ -288,6 +304,7 @@ export function useDashboardSocket() {
     scoreboard,
     winner,
     challengeDisplay,
+    councilVotes,
     overlay,
     setOverlay,
     clearOverlay,

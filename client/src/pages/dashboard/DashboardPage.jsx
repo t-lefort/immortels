@@ -5,6 +5,7 @@ import GameDisplay from './GameDisplay.jsx';
 import NightDisplay from './NightDisplay.jsx';
 import CouncilDisplay from './CouncilDisplay.jsx';
 import ResultDisplay from './ResultDisplay.jsx';
+import VoteRevealDisplay from './VoteRevealDisplay.jsx';
 import ChallengeAnnouncementDisplay from './ChallengeAnnouncementDisplay.jsx';
 import EndDisplay from './EndDisplay.jsx';
 import TimerOverlay from './TimerOverlay.jsx';
@@ -25,9 +26,11 @@ export default function DashboardPage() {
     speechOrder,
     timer,
     phaseResult,
+    eliminatedPlayer,
     scoreboard,
     winner,
     challengeDisplay,
+    councilVotes,
     overlay,
     setOverlay,
     clearOverlay,
@@ -38,16 +41,21 @@ export default function DashboardPage() {
     clearOverlay();
   }, [clearOverlay]);
 
-  // Auto-dismiss result after the ResultDisplay internal timer
+  // Auto-dismiss result after the ResultDisplay internal timer.
+  // If this was a village council with vote data, transition to vote_reveal overlay.
   useEffect(() => {
     if (overlay === 'result' && phaseResult) {
       // Auto-dismiss after generous delay (ResultDisplay has its own internal timing)
-      const timer = setTimeout(() => {
-        clearOverlay();
+      const t = setTimeout(() => {
+        if (councilVotes && councilVotes.length > 0) {
+          setOverlay('vote_reveal');
+        } else {
+          clearOverlay();
+        }
       }, 15000);
-      return () => clearTimeout(timer);
+      return () => clearTimeout(t);
     }
-  }, [overlay, phaseResult, clearOverlay]);
+  }, [overlay, phaseResult, councilVotes, clearOverlay, setOverlay]);
 
   // ─── Render state machine ─────────────────────────────────────
   return (
@@ -112,6 +120,14 @@ export default function DashboardPage() {
             <ResultDisplay
               phaseResult={phaseResult}
               onDismiss={handleResultDismiss}
+            />
+          )}
+
+          {/* Post-council vote reveal overlay */}
+          {overlay === 'vote_reveal' && councilVotes && (
+            <VoteRevealDisplay
+              councilVotes={councilVotes}
+              eliminatedPlayer={eliminatedPlayer}
             />
           )}
 

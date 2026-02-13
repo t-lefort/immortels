@@ -490,11 +490,25 @@ router.post('/phase/reveal', (req, res) => {
       eliminatedBy: p.eliminated_by,
     }));
 
+    // For village council phases, include individual vote details for the dashboard vote reveal
+    let councilVotes = null;
+    if (phase.type === 'village_council') {
+      councilVotes = getVoteDetails(Number(phaseId))
+        .filter(v => v.vote_type === 'village')
+        .map(v => ({
+          voterName: v.voter_name,
+          targetName: v.target_name,
+          voterId: v.voter_id,
+          targetId: v.target_id,
+        }));
+    }
+
     // Broadcast phase result to all
     emitToAll(io, 'phase:result', {
       phase,
       eliminated: eliminatedData,
       noVictim: eliminatedData.length === 0,
+      councilVotes,
     });
 
     // Send player:eliminated to each eliminated player specifically
@@ -912,6 +926,15 @@ router.post('/challenge/display', (req, res) => {
   }
 
   res.json({ displayed: true, name: challengeName });
+});
+
+router.post('/vote-reveal/dismiss', (req, res) => {
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:vote_reveal_dismiss', {});
+  }
+
+  res.json({ dismissed: true });
 });
 
 router.post('/challenge/display-clear', (req, res) => {
