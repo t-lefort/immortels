@@ -23,7 +23,6 @@ export default function DashboardPage() {
     playerCount,
     voteProgress,
     speechOrder,
-    dashboardSpeechOrder,
     timer,
     phaseResult,
     scoreboard,
@@ -102,7 +101,6 @@ export default function DashboardPage() {
             <CouncilDisplay
               currentPhase={currentPhase}
               speechOrder={speechOrder}
-              dashboardSpeechOrder={dashboardSpeechOrder}
               timer={timer}
               voteProgress={voteProgress}
               players={players}

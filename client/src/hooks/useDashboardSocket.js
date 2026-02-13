@@ -21,7 +21,6 @@ export function useDashboardSocket() {
   // Phase-specific state
   const [voteProgress, setVoteProgress] = useState({ count: 0, total: 0 });
   const [speechOrder, setSpeechOrder] = useState(null);
-  const [dashboardSpeechOrder, setDashboardSpeechOrder] = useState(null);
   const [timer, setTimer] = useState(null);
 
   // Result / overlay state
@@ -114,7 +113,6 @@ export function useDashboardSocket() {
       setCurrentPhase(null);
       setVoteProgress({ count: 0, total: 0 });
       setSpeechOrder(null);
-      setDashboardSpeechOrder(null);
       setTimer(null);
       setPhaseResult(null);
       setEliminatedPlayer(null);
@@ -140,7 +138,6 @@ export function useDashboardSocket() {
       setEliminatedPlayer(null);
       setVoteProgress({ count: 0, total: 0 });
       setSpeechOrder(null);
-      setDashboardSpeechOrder(null);
       setTimer(null); // Clear any previous timer to prevent stacking
 
       if (phase.type === 'night') {
@@ -197,16 +194,11 @@ export function useDashboardSocket() {
     // ─── Timer ──────────────────────────────────────────────────────
     socket.on('timer:start', (data) => {
       setTimer({ duration: data.duration, startedAt: Date.now() });
-      setDashboardSpeechOrder(null); // Clear speech order display when timer starts
     });
 
     // ─── Speech order ───────────────────────────────────────────────
     socket.on('speech:order', (data) => {
       if (data.order) setSpeechOrder(data.order);
-    });
-
-    socket.on('dashboard:speech_order', (data) => {
-      if (data.order) setDashboardSpeechOrder(data.order);
     });
 
     // ─── Special powers (dashboard shows minimal info) ──────────────
@@ -290,7 +282,6 @@ export function useDashboardSocket() {
     playerCount,
     voteProgress,
     speechOrder,
-    dashboardSpeechOrder,
     timer,
     phaseResult,
     eliminatedPlayer,
