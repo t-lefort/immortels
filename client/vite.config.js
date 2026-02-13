@@ -6,6 +6,7 @@ export default defineConfig({
   root: './client',
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
     port: 5173,
     proxy: {
       '/api': {

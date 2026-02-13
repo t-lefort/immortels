@@ -439,12 +439,14 @@ router.post('/phase/reveal', (req, res) => {
   if (victims && Array.isArray(victims)) {
     for (const victim of victims) {
       try {
-        // Check immunity before eliminating
-        const immuneResult = handleImmunite(Number(phaseId), victim.playerId);
-        if (immuneResult.applied) {
-          immuneApplied.push({ playerId: victim.playerId, playerName: immuneResult.playerName });
-          logger.special('Immunity applied', { playerId: victim.playerId, playerName: immuneResult.playerName });
-          continue; // Skip elimination — player is immune
+        // Check immunity before eliminating (only applies to village council)
+        if (phase.type === 'village_council') {
+          const immuneResult = handleImmunite(Number(phaseId), victim.playerId);
+          if (immuneResult.applied) {
+            immuneApplied.push({ playerId: victim.playerId, playerName: immuneResult.playerName });
+            logger.special('Immunity applied', { playerId: victim.playerId, playerName: immuneResult.playerName });
+            continue; // Skip elimination — player is immune
+          }
         }
 
         const player = eliminatePlayer(victim.playerId, Number(phaseId), victim.eliminatedBy);
@@ -473,6 +475,8 @@ router.post('/phase/reveal', (req, res) => {
     scoreChanges = computePhaseScores(Number(phaseId));
     if (scoreChanges.length > 0) {
       logger.score('Phase scores computed', { phaseId: Number(phaseId), changes: scoreChanges.length });
+      // Store score changes so phase/undo can revert them
+      setSetting(`score_changes_phase_${phaseId}`, JSON.stringify(scoreChanges));
     }
   } catch (err) {
     logger.error('Could not compute phase scores', { phaseId: Number(phaseId), error: err.message });
@@ -1016,6 +1020,22 @@ router.post('/phase/undo', (req, res) => {
   const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
   if (!phase) {
     return res.status(404).json({ error: 'Phase introuvable' });
+  }
+
+  // Revert score changes from this phase
+  const scoreChangesJson = getSetting(`score_changes_phase_${phaseId}`);
+  if (scoreChangesJson) {
+    try {
+      const scoreChanges = JSON.parse(scoreChangesJson);
+      const revertScore = db.prepare('UPDATE players SET score = score - ? WHERE id = ?');
+      for (const change of scoreChanges) {
+        revertScore.run(change.delta, change.playerId);
+      }
+      setSetting(`score_changes_phase_${phaseId}`, null);
+      logger.score('Phase scores reverted via undo', { phaseId: Number(phaseId), changes: scoreChanges.length });
+    } catch (err) {
+      logger.error('Could not revert phase scores', { phaseId: Number(phaseId), error: err.message });
+    }
   }
 
   // Revert phase to active state

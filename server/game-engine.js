@@ -314,10 +314,10 @@ export function resolveNight(phaseId) {
 
   if (ghostResults.length > 0) {
     if (ghostResults.length > 1 && ghostResults[0].count === ghostResults[1].count) {
-      // Tie among ghosts → random pick
+      // Tie among ghosts → deterministic pick (lowest player ID for idempotent results)
       const tiedTargets = ghostResults.filter(r => r.count === ghostResults[0].count);
-      const pick = tiedTargets[Math.floor(Math.random() * tiedTargets.length)];
-      ghostVictim = { id: pick.targetId, name: pick.targetName };
+      tiedTargets.sort((a, b) => a.targetId - b.targetId);
+      ghostVictim = { id: tiedTargets[0].targetId, name: tiedTargets[0].targetName };
     } else {
       ghostVictim = { id: ghostResults[0].targetId, name: ghostResults[0].targetName };
     }
@@ -602,9 +602,10 @@ function computeNightScores(db, phaseId, changes, addScore) {
 
   if (ghostVictim && ghostVictim.victim_role === 'villager') {
     // All ghost wolves get +3 when a villager is eliminated by ghost vote
+    // Exclude wolves eliminated in THIS phase (they weren't ghosts when voting happened)
     const ghostWolves = db.prepare(`
-      SELECT id, name FROM players WHERE role = 'wolf' AND status = 'ghost'
-    `).all();
+      SELECT id, name FROM players WHERE role = 'wolf' AND status = 'ghost' AND eliminated_at_phase != ?
+    `).all(phaseId);
 
     for (const gw of ghostWolves) {
       addScore.run(3, gw.id);

@@ -37,7 +37,7 @@ export function useDashboardSocket() {
   const [overlay, setOverlay] = useState(null); // 'night' | 'council' | 'result' | 'timer' | 'end' | null
 
   const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+    if (socketRef.current) return; // Guard against duplicate sockets (including connecting state)
 
     const socket = io({
       transports: ['websocket', 'polling'],

@@ -9,6 +9,8 @@ export default function CountdownTimer({ duration, onComplete }) {
   const [remaining, setRemaining] = useState(duration);
   const intervalRef = useRef(null);
   const startTimeRef = useRef(Date.now());
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     setRemaining(duration);
@@ -21,7 +23,7 @@ export default function CountdownTimer({ duration, onComplete }) {
 
       if (left <= 0) {
         clearInterval(intervalRef.current);
-        if (onComplete) onComplete();
+        if (onCompleteRef.current) onCompleteRef.current();
       }
     }, 250); // update 4x per second for smooth display
 
@@ -30,7 +32,7 @@ export default function CountdownTimer({ duration, onComplete }) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [duration, onComplete]);
+  }, [duration]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;

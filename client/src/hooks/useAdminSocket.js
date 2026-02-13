@@ -14,7 +14,7 @@ export function useAdminSocket() {
   const listenersRef = useRef({});
 
   const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+    if (socketRef.current) return; // Guard against duplicate sockets (including connecting state)
 
     const password = localStorage.getItem('admin_password');
     if (!password) return;

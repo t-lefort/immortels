@@ -267,6 +267,13 @@ export function PlayerProvider({ children }) {
           setHasVoted(me.hasVoted || {});
           setError(null);
           toast.info('Connexion retablie');
+          // Re-fetch wolves list for wolf players
+          if (me.role === 'wolf' && me.gameStatus !== 'setup') {
+            try {
+              const wolvesData = await playerApi.getWolves();
+              setWolves(wolvesData.wolves);
+            } catch { /* ignore */ }
+          }
         } catch (err) {
           // Session expired — redirect to login
           if (err.message && (err.message.includes('401') || err.message.includes('Session invalide'))) {

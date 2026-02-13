@@ -36,6 +36,7 @@ const EVENTS = [
   'special:result',
   'speech:order',
   'lobby:update',
+  'role:revealed',
   'socket:reconnected', // synthetic event
 ];
 

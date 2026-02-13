@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
@@ -38,11 +38,13 @@ export default function VoyantePrompt() {
   }
 
   // Also check if the result came via socket
-  if (!revealedRole && specialResult?.power === 'voyante' && specialResult?.target?.role) {
-    setRevealedRole(specialResult.target.role);
-    setRevealedTarget({ name: specialResult.target.name, id: specialResult.target.id });
-    setSpecialResult(null);
-  }
+  useEffect(() => {
+    if (!revealedRole && specialResult?.power === 'voyante' && specialResult?.target?.role) {
+      setRevealedRole(specialResult.target.role);
+      setRevealedTarget({ name: specialResult.target.name, id: specialResult.target.id });
+      setSpecialResult(null);
+    }
+  }, [revealedRole, specialResult, setSpecialResult]);
 
   // Result screen
   if (revealedRole && revealedTarget) {

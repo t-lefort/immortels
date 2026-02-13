@@ -145,8 +145,8 @@ function startServer(retries = 10, delay = 300) {
     }
   });
 
-  server.listen(PORT, () => {
-    console.log(`[SERVER] Les Immortels running on http://localhost:${PORT}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[SERVER] Les Immortels running on http://0.0.0.0:${PORT}`);
   });
 }
 
