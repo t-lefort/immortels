@@ -367,6 +367,13 @@ export function PlayerProvider({ children }) {
         // Update player list with eliminated
         if (data.eliminated) {
           setEliminated((prev) => [...prev, ...data.eliminated]);
+          // Update players array so eliminated players show as ghost
+          const eliminatedIds = new Set(data.eliminated.map((e) => e.id));
+          setPlayers((prev) =>
+            prev.map((p) =>
+              eliminatedIds.has(p.id) ? { ...p, status: 'ghost' } : p
+            )
+          );
           // Refresh player data to update own status if eliminated
           playerApi.getMe().then((me) => {
             setPlayer((prev) => ({
@@ -381,6 +388,14 @@ export function PlayerProvider({ children }) {
 
       on('player:eliminated', (data) => {
         setEliminated((prev) => [...prev, data.player]);
+        // Update players array so eliminated player shows as ghost
+        if (data.player?.id) {
+          setPlayers((prev) =>
+            prev.map((p) =>
+              p.id === data.player.id ? { ...p, status: 'ghost' } : p
+            )
+          );
+        }
         // Refresh own data
         playerApi.getMe().then((me) => {
           setPlayer((prev) => ({
