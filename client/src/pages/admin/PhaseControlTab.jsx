@@ -727,9 +727,17 @@ function NightResultsPanel({ results, currentPhase, players, loading, onReveal }
 }
 
 function CouncilResultsPanel({ results, currentPhase, loading, onReveal }) {
-  const victims = [];
+  const [tieSelection, setTieSelection] = useState(null);
 
-  if (results.victim && !results.immune) {
+  // Determine if this is a tie that needs admin resolution
+  const needsTieBreak = results.tie && !results.victim && results.tiedPlayers?.length > 1;
+
+  // Build victims array
+  const victims = [];
+  if (needsTieBreak && tieSelection) {
+    // Admin selected a player from the tie
+    victims.push({ playerId: tieSelection.targetId, eliminatedBy: 'village' });
+  } else if (results.victim && !results.immune) {
     victims.push({ playerId: results.victim.targetId, eliminatedBy: 'village' });
   }
 
@@ -743,18 +751,51 @@ function CouncilResultsPanel({ results, currentPhase, loading, onReveal }) {
           <div key={r.targetId} className="flex items-center gap-2">
             <span className="text-white">{r.targetName}</span>
             <span className="text-gray-400">— {r.count} vote(s)</span>
-            {r.targetId === results.victim?.targetId && (
+            {!needsTieBreak && r.targetId === results.victim?.targetId && (
               <span className="text-red-400 text-xs font-medium">ÉLIMINÉ</span>
+            )}
+            {needsTieBreak && tieSelection && r.targetId === tieSelection.targetId && (
+              <span className="text-red-400 text-xs font-medium">ÉLIMINÉ (choix du {results.tieBreaker === 'mayor' ? 'maire' : "l'admin"})</span>
             )}
           </div>
         ))}
 
-        {/* Tie */}
-        {results.tie && (
+        {/* Tie — needs admin resolution */}
+        {needsTieBreak && (
+          <div className="mt-3 p-3 bg-yellow-900/30 border border-yellow-800 rounded-lg">
+            <div className="text-yellow-400 font-medium mb-2">
+              Égalité !
+              {results.tieBreaker === 'mayor'
+                ? ' Le maire doit trancher parmi les joueurs à égalité :'
+                : " Pas de maire — l'admin doit trancher :"}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {results.tiedPlayers.map((p) => (
+                <button
+                  key={p.targetId}
+                  onClick={() => setTieSelection(p)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    tieSelection?.targetId === p.targetId
+                      ? 'bg-red-700 text-white ring-2 ring-red-400'
+                      : 'bg-gray-700 text-white hover:bg-gray-600'
+                  }`}
+                >
+                  {p.targetName} ({p.count} votes)
+                </button>
+              ))}
+            </div>
+            {tieSelection && (
+              <div className="mt-2 text-sm text-red-300">
+                Choix : <span className="font-bold">{tieSelection.targetName}</span> sera éliminé(e).
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tie already resolved (victim set) */}
+        {results.tie && results.victim && (
           <div className="text-yellow-400 mt-2">
-            Égalité !
-            {results.tieBreaker === 'mayor' && " Le maire doit trancher."}
-            {results.tieBreaker === 'random' && " Tirage au sort effectué."}
+            Égalité ! Tranchée par {results.tieBreaker === 'mayor' ? 'le maire' : "l'admin"}.
           </div>
         )}
 
@@ -767,9 +808,14 @@ function CouncilResultsPanel({ results, currentPhase, loading, onReveal }) {
       </div>
 
       <div className="mt-4 pt-4 border-t border-gray-800">
+        {needsTieBreak && !tieSelection && (
+          <div className="text-xs text-yellow-400 mb-2">
+            Sélectionnez un joueur ci-dessus pour pouvoir révéler les résultats.
+          </div>
+        )}
         <button
           onClick={() => onReveal(victims)}
-          disabled={!!loading}
+          disabled={!!loading || (needsTieBreak && !tieSelection)}
           className="px-4 py-2 bg-wolf text-white rounded-lg hover:bg-red-800 disabled:opacity-50 font-medium text-sm"
         >
           Révéler les résultats

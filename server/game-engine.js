@@ -417,13 +417,12 @@ export function resolveVillageCouncil(phaseId) {
   const tiedPlayers = results.filter(r => r.count === topCount);
 
   if (tiedPlayers.length > 1) {
+    // Never auto-resolve ties — admin must choose (mayor's decision or admin's decision)
     if (mayorId) {
-      // Mayor decides — admin will handle this
       return { results, victim: null, tie: true, tiedPlayers, tieBreaker: 'mayor' };
     }
-    // Random pick among tied
-    const pick = tiedPlayers[Math.floor(Math.random() * tiedPlayers.length)];
-    return { results, victim: pick, tie: true, tiedPlayers, tieBreaker: 'random' };
+    // No mayor set — admin decides directly
+    return { results, victim: null, tie: true, tiedPlayers, tieBreaker: 'admin' };
   }
 
   // Single winner — check immunity
