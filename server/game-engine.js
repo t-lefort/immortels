@@ -295,6 +295,13 @@ export function resolveNight(phaseId) {
     throw new Error(`Phase ${phaseId} is not a night phase`);
   }
 
+  // Ensure ghost identifications are resolved before reading them.
+  // resolveGhostIdentifications is idempotent — it re-computes target_is_wolf
+  // from actual player roles every time, so it's safe to call multiple times.
+  // This fixes a bug where target_is_wolf remained 0 (the default) when
+  // results were fetched before closeVoting had been called.
+  resolveGhostIdentifications(phaseId);
+
   // --- Wolf votes ---
   const wolfResults = getVoteResults(phaseId, 'wolf');
   let wolfVictim = null;
