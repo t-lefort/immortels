@@ -13,9 +13,24 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
   // Track current speaker index (auto-advance with timer)
   const [currentSpeakerIndex, setCurrentSpeakerIndex] = useState(0);
 
+  // Reset speaker index when speech order changes
+  useEffect(() => {
+    setCurrentSpeakerIndex(0);
+  }, [speechOrder]);
+
   // Timer countdown
   const [timeRemaining, setTimeRemaining] = useState(null);
   const intervalRef = useRef(null);
+
+  // Track whether we already auto-advanced for the current timer
+  const hasAdvancedRef = useRef(false);
+
+  // Reset auto-advance flag when a new timer starts
+  useEffect(() => {
+    if (timer) {
+      hasAdvancedRef.current = false;
+    }
+  }, [timer]);
 
   useEffect(() => {
     if (!timer) {
@@ -42,6 +57,22 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [timer]);
+
+  // Auto-advance to next speaker when timer reaches 0
+  useEffect(() => {
+    if (
+      timeRemaining === 0 &&
+      !hasAdvancedRef.current &&
+      speechOrder &&
+      currentSpeakerIndex < speechOrder.length - 1
+    ) {
+      hasAdvancedRef.current = true;
+      const timeout = setTimeout(() => {
+        setCurrentSpeakerIndex(prev => prev + 1);
+      }, 2000); // 2s delay so "Temps écoulé" is visible before advancing
+      return () => clearTimeout(timeout);
+    }
+  }, [timeRemaining, currentSpeakerIndex, speechOrder]);
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
