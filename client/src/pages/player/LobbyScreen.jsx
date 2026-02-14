@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 
 /**
@@ -38,6 +39,14 @@ export default function LobbyScreen() {
           {playerCount === 1 ? 'joueur connecté' : 'joueurs connectés'}
         </p>
       </div>
+
+      {/* Rules link */}
+      <Link
+        to="/rules"
+        className="mt-6 text-gray-500 hover:text-gray-300 transition-colors text-sm underline underline-offset-4"
+      >
+        Règles du jeu
+      </Link>
 
       {/* Connection indicator */}
       <div className="mt-8 flex items-center gap-2">

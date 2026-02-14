@@ -115,7 +115,7 @@ function initSchema() {
 function initDefaultSettings() {
   const defaults = {
     game_status: 'setup',                // 'setup' | 'in_progress' | 'finished'
-    admin_password: 'immortels',
+    admin_password: 'REDACTED_PASSWORD',
     current_phase_id: null,
     num_wolves: '8',
     moonless_night: '0',                 // '0' = seer active, '1' = disabled

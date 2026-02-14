@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AdminPage from './pages/admin/AdminPage.jsx';
 import PlayerPage from './pages/player/PlayerPage.jsx';
 import DashboardPage from './pages/dashboard/DashboardPage.jsx';
+import RulesPage from './pages/RulesPage.jsx';
 import { PlayerProvider } from './contexts/PlayerContext.jsx';
 import { ToastProvider } from './contexts/ToastContext.jsx';
 
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/play" element={<PlayPageWrapper />} />
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/rules" element={<RulesPage />} />
       <Route path="*" element={<Navigate to="/play" replace />} />
     </Routes>
   );

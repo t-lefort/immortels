@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import CountdownTimer from '../../components/CountdownTimer.jsx';
 
@@ -109,13 +110,19 @@ export default function WaitingScreen() {
       )}
 
       {/* Connection status */}
-      <div className="fixed bottom-4 left-0 right-0 flex justify-center">
+      <div className="fixed bottom-4 left-0 right-0 flex justify-center gap-3">
         <div className="flex items-center gap-2 bg-gray-900/90 border border-gray-800 rounded-full px-4 py-2">
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-gray-500 text-xs">
             {connected ? 'Connecté' : 'Reconnexion...'}
           </span>
         </div>
+        <Link
+          to="/rules"
+          className="flex items-center bg-gray-900/90 border border-gray-800 rounded-full px-4 py-2 text-gray-500 text-xs hover:text-gray-300 transition-colors"
+        >
+          Règles
+        </Link>
       </div>
     </div>
   );
