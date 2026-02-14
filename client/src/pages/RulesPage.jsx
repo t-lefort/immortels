@@ -169,7 +169,7 @@ const sections = [
                 <td className="text-right text-green-400 font-semibold">+1</td>
               </tr>
               <tr className="border-b border-gray-800">
-                <td className="py-2 pr-3">Survivant final</td>
+                <td className="py-2 pr-3">Survivant de l'équipe gagnante</td>
                 <td className="text-right text-green-400 font-semibold">+3</td>
               </tr>
               <tr className="border-b border-gray-800">
@@ -178,7 +178,7 @@ const sections = [
               </tr>
               <tr className="border-b border-gray-800">
                 <td className="py-2 pr-3">Loup survit à un conseil du village</td>
-                <td className="text-right text-green-400 font-semibold">+1</td>
+                <td className="text-right text-green-400 font-semibold">+2</td>
               </tr>
               <tr className="border-b border-gray-800">
                 <td className="py-2 pr-3">Fantôme villageois identifie un loup</td>

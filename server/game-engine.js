@@ -598,7 +598,7 @@ function computeNightScores(db, phaseId, changes, addScore) {
     }
   }
 
-  // --- Ghost wolf bonus: +3 for ALL ghost wolves if a villager was eliminated by ghosts ---
+  // --- Ghost wolf bonus: +3 for wolf ghosts who voted for the eliminated villager ---
   const ghostVictim = db.prepare(`
     SELECT pv.player_id, p.role AS victim_role
     FROM phase_victims pv
@@ -607,13 +607,15 @@ function computeNightScores(db, phaseId, changes, addScore) {
   `).get(phaseId);
 
   if (ghostVictim && ghostVictim.victim_role === 'villager') {
-    // All ghost wolves get +3 when a villager is eliminated by ghost vote
-    // Exclude wolves eliminated in THIS phase (they weren't ghosts when voting happened)
-    const ghostWolves = db.prepare(`
-      SELECT id, name FROM players WHERE role = 'wolf' AND status = 'ghost' AND eliminated_at_phase != ?
-    `).all(phaseId);
+    // Only wolf ghosts who voted for this specific victim get +3
+    const wolfGhostsWhoVoted = db.prepare(`
+      SELECT p.id, p.name FROM votes v
+      JOIN players p ON v.voter_id = p.id
+      WHERE v.phase_id = ? AND v.vote_type = 'ghost_eliminate' AND v.target_id = ? AND v.is_valid = 1
+        AND p.role = 'wolf' AND p.status = 'ghost'
+    `).all(phaseId, ghostVictim.player_id);
 
-    for (const gw of ghostWolves) {
+    for (const gw of wolfGhostsWhoVoted) {
       addScore.run(3, gw.id);
       changes.push({ playerId: gw.id, playerName: gw.name, delta: 3, reason: 'ghost_wolf_eliminated_villager' });
     }
@@ -623,7 +625,7 @@ function computeNightScores(db, phaseId, changes, addScore) {
 /**
  * Village council scoring rules:
  * - Villager voted for a wolf: +2 (even if the wolf isn't eliminated)
- * - Wolf survived the council: +1
+ * - Wolf survived the council: +2
  */
 function computeCouncilScores(db, phaseId, changes, addScore) {
   // --- Villagers who voted for a wolf: +2 ---
@@ -642,14 +644,14 @@ function computeCouncilScores(db, phaseId, changes, addScore) {
     changes.push({ playerId: vote.voter_id, playerName: vote.voter_name, delta: 2, reason: 'villager_voted_wolf' });
   }
 
-  // --- Wolves who survived the council: +1 ---
+  // --- Wolves who survived the council: +2 ---
   const survivingWolves = db.prepare(`
     SELECT id, name FROM players WHERE role = 'wolf' AND status = 'alive'
   `).all();
 
   for (const wolf of survivingWolves) {
-    addScore.run(1, wolf.id);
-    changes.push({ playerId: wolf.id, playerName: wolf.name, delta: 1, reason: 'wolf_survived_council' });
+    addScore.run(2, wolf.id);
+    changes.push({ playerId: wolf.id, playerName: wolf.name, delta: 2, reason: 'wolf_survived_council' });
   }
 }
 
@@ -691,13 +693,15 @@ export function computeChallengeScores(challengeId) {
 }
 
 /**
- * Compute and apply final scores: +3 for each surviving player.
+ * Compute and apply final scores: +3 for each surviving player of the winning team.
+ * @param {string} winner - 'wolves' or 'villagers'
  */
-export function computeFinalScores() {
+export function computeFinalScores(winner) {
   const db = getDb();
+  const winningRole = winner === 'wolves' ? 'wolf' : 'villager';
   const survivors = db.prepare(
-    "SELECT id, name FROM players WHERE status = 'alive'"
-  ).all();
+    "SELECT id, name FROM players WHERE status = 'alive' AND role = ?"
+  ).all(winningRole);
 
   const changes = [];
   const addScore = db.prepare('UPDATE players SET score = score + 3 WHERE id = ?');

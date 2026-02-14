@@ -1215,24 +1215,24 @@ router.post('/game/end', (req, res) => {
   }
 
   setSetting('game_status', 'finished');
-  logger.game('Game ended', { winner: requestedWinner || 'auto' });
+
+  // Determine winner first (needed for final score computation)
+  const db = getDb();
+  const aliveWolves = db.prepare("SELECT COUNT(*) as count FROM players WHERE role = 'wolf' AND status = 'alive'").get().count;
+  const winner = requestedWinner || (aliveWolves > 0 ? 'wolves' : 'villagers');
+  setSetting('game_winner', winner);
+
+  logger.game('Game ended', { winner });
 
   let scoreChanges = [];
   try {
-    scoreChanges = computeFinalScores();
+    scoreChanges = computeFinalScores(winner);
     logger.score('Final scores computed', { changes: scoreChanges.length });
   } catch (err) {
     logger.error('Could not compute final scores', { error: err.message });
   }
 
   const scoreboard = getScoreboard();
-
-  // Determine winner: use explicit parameter or auto-detect from alive wolves
-  const db = getDb();
-  const aliveWolves = db.prepare("SELECT COUNT(*) as count FROM players WHERE role = 'wolf' AND status = 'alive'").get().count;
-  const winner = requestedWinner || (aliveWolves > 0 ? 'wolves' : 'villagers');
-
-  setSetting('game_winner', winner);
 
   const io = req.app.get('io');
   if (io) {
