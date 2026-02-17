@@ -13,6 +13,7 @@ import NightGhostVote from './NightGhostVote.jsx';
 import VillageCouncilVote from './VillageCouncilVote.jsx';
 import EliminatedScreen from './EliminatedScreen.jsx';
 import GameEndScreen from './GameEndScreen.jsx';
+import PhaseResultScreen from './PhaseResultScreen.jsx';
 import ProtecteurPrompt from './ProtecteurPrompt.jsx';
 import SorcierePrompt from './SorcierePrompt.jsx';
 import VoyantePrompt from './VoyantePrompt.jsx';
@@ -34,6 +35,7 @@ export default function PlayerPage() {
     connected,
     gameStatus,
     currentPhase,
+    phaseResult,
     specialPrompt,
   } = usePlayer();
 
@@ -127,6 +129,7 @@ export default function PlayerPage() {
         return 'waiting-council';
       }
     }
+    if (phaseResult) return 'phase-result';
     return 'waiting';
   }
 
@@ -246,6 +249,17 @@ export default function PlayerPage() {
           </>
         );
       }
+    }
+
+    // ─── Phase result ──────────────────────────────────────────────────────
+    if (phaseResult) {
+      return (
+        <>
+          <PhaseResultScreen />
+          {renderSpecialPrompt()}
+          <ConnectionStatus connected={connected} position="bottom" />
+        </>
+      );
     }
 
     // ─── Default: waiting ─────────────────────────────────────────────────

@@ -134,7 +134,9 @@ export default function ResultDisplay({ phaseResult, onDismiss }) {
             style={{ fontSize: '1.5vw' }}
           >
             {phaseResult?.phase?.type === 'night'
-              ? 'Cette nuit, la victime est...'
+              ? (eliminated?.eliminatedBy === 'ghosts'
+                ? 'Les fantômes ont frappé...'
+                : 'Les loups ont frappé...')
               : 'Le village a décidé d\'éliminer...'}
           </p>
 
@@ -201,7 +203,10 @@ export default function ResultDisplay({ phaseResult, onDismiss }) {
             <div className="mt-[3vh]">
               {phaseResult.eliminated.slice(1).map((victim, i) => (
                 <div key={victim.id} className="animate-slideUp" style={{ animationDelay: `${(i + 1) * 500}ms`, animationFillMode: 'both' }}>
-                  <span className="text-gray-400 font-medium" style={{ fontSize: '2vw' }}>
+                  <span className="text-gray-500" style={{ fontSize: '1vw' }}>
+                    {victim.eliminatedBy === 'ghosts' ? '(fantômes)' : victim.eliminatedBy === 'wolves' ? '(loups)' : ''}
+                  </span>
+                  <span className="text-gray-400 font-medium ml-[0.5vw]" style={{ fontSize: '2vw' }}>
                     {victim.name}
                   </span>
                   <span

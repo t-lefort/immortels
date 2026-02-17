@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
-import CountdownTimer from '../../components/CountdownTimer.jsx';
 
 /**
  * Village council vote screen.
@@ -13,7 +12,7 @@ import CountdownTimer from '../../components/CountdownTimer.jsx';
 export default function VillageCouncilVote() {
   const {
     player, players, vote, hasVoted,
-    voteCount, totalExpected, timerDuration, setTimerDuration,
+    voteCount, totalExpected,
   } = usePlayer();
   const [selected, setSelected] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -43,7 +42,7 @@ export default function VillageCouncilVote() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 pb-28">
+    <div className="min-h-screen bg-background px-4 py-6 pb-28 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {/* Header */}
       <div className="text-center mb-4">
         <div className="inline-block px-3 py-1 rounded-full bg-yellow-900/40 text-yellow-500 text-xs font-medium uppercase tracking-wider mb-2">
@@ -56,16 +55,6 @@ export default function VillageCouncilVote() {
           Votez pour éliminer un joueur suspect
         </p>
       </div>
-
-      {/* Timer */}
-      {timerDuration && (
-        <div className="mb-4 bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <CountdownTimer
-            duration={timerDuration}
-            onComplete={() => setTimerDuration(null)}
-          />
-        </div>
-      )}
 
       {/* Vote counter */}
       <div className="flex justify-center mb-4">

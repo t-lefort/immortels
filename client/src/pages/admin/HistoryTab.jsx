@@ -90,6 +90,29 @@ export default function HistoryTab() {
                 <TallySection title="Votes du conseil" results={voteData.villageResults} color="text-yellow-400" />
               )}
 
+              {/* Ghost identifications (villager ghosts guessing wolves) */}
+              {voteData.ghostIdentifications?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium mb-1 text-purple-400">Identifications fantômes</h3>
+                  <div className="space-y-1">
+                    {voteData.ghostIdentifications.map((gi, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-gray-300">
+                        <span className="text-purple-300">{gi.ghost_name}</span>
+                        <span className="text-gray-600">&rarr;</span>
+                        <span className="text-white">{gi.target_name}</span>
+                        <span className={`px-1.5 py-0.5 rounded ${
+                          gi.target_is_wolf
+                            ? 'bg-green-900/50 text-green-300'
+                            : 'bg-red-900/50 text-red-300'
+                        }`}>
+                          {gi.target_is_wolf ? 'Correct' : 'Faux'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Individual votes */}
               {voteData.details?.length > 0 && (
                 <div>

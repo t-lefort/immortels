@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
-import CountdownTimer from '../../components/CountdownTimer.jsx';
 
 /**
  * Wolf vote during night phase.
@@ -12,7 +11,7 @@ import CountdownTimer from '../../components/CountdownTimer.jsx';
 export default function NightWolfVote() {
   const {
     players, wolves, vote, hasVoted,
-    voteCount, totalExpected, timerDuration, setTimerDuration,
+    voteCount, totalExpected,
   } = usePlayer();
   const [selected, setSelected] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -56,16 +55,6 @@ export default function NightWolfVote() {
           Sélectionnez un joueur pour voter
         </p>
       </div>
-
-      {/* Timer */}
-      {timerDuration && (
-        <div className="mb-4 bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <CountdownTimer
-            duration={timerDuration}
-            onComplete={() => setTimerDuration(null)}
-          />
-        </div>
-      )}
 
       {/* Vote counter */}
       <div className="flex justify-center mb-4">

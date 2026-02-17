@@ -682,7 +682,7 @@ export function computeChallengeScores(challengeId) {
   db.transaction(() => {
     for (const playerId of winningPlayerIds) {
       const player = getPlayer.get(playerId);
-      if (player && player.status === 'alive') {
+      if (player) {
         addScore.run(playerId);
         changes.push({ playerId, playerName: player.name, delta: 1, reason: 'challenge_winner' });
       }

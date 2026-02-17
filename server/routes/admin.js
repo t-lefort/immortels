@@ -579,12 +579,29 @@ router.get('/phase/votes', (req, res) => {
   const ghostResults = getVoteResults(Number(phaseId), 'ghost_eliminate');
   const villageResults = getVoteResults(Number(phaseId), 'village');
 
+  // Ghost villager identifications
+  const db = getDb();
+  const ghostIdentifications = db.prepare(`
+    SELECT
+      gi.ghost_id,
+      g.name AS ghost_name,
+      gi.target_id,
+      t.name AS target_name,
+      t.role AS target_role,
+      gi.target_is_wolf
+    FROM ghost_identifications gi
+    JOIN players g ON gi.ghost_id = g.id
+    JOIN players t ON gi.target_id = t.id
+    WHERE gi.phase_id = ?
+  `).all(Number(phaseId));
+
   res.json({
     details,
     wolfResults,
     villagerGuessResults,
     ghostResults,
     villageResults,
+    ghostIdentifications,
   });
 });
 
@@ -893,6 +910,11 @@ router.post('/challenge/assign', (req, res) => {
   db.transaction(() => {
     db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(challenge.special_role_awarded, Number(playerId));
     db.prepare('UPDATE challenges SET awarded_to_player_id = ? WHERE id = ?').run(Number(playerId), Number(challengeId));
+
+    // When assigning maire role, also set the mayor_id game setting
+    if (challenge.special_role_awarded === 'maire') {
+      setSetting('mayor_id', String(playerId));
+    }
   })();
 
   const io = req.app.get('io');
