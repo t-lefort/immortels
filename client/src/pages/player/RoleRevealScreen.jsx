@@ -10,23 +10,22 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
  * "J'ai compris" button to dismiss permanently (localStorage).
  */
 export default function RoleRevealScreen() {
-  const { player, roleRevealed, wolves } = usePlayer();
+  const { player, roleRevealed, wolves, markRoleSeen } = usePlayer();
   const [dismissed, setDismissed] = useState(false);
   const containerRef = useRef(null);
 
   const role = roleRevealed || player?.role;
   const isWolf = role === 'wolf';
-  const storageKey = `role_seen_${player?.id}`;
 
-  // Check if already dismissed
+  // Already seen (from DB)
   useEffect(() => {
-    if (localStorage.getItem(storageKey)) {
+    if (player?.role_seen) {
       setDismissed(true);
     }
-  }, [storageKey]);
+  }, [player?.role_seen]);
 
   function handleDismiss() {
-    localStorage.setItem(storageKey, '1');
+    markRoleSeen();
     setDismissed(true);
   }
 

@@ -176,6 +176,15 @@ export function PlayerProvider({ children }) {
     }
   }, []);
 
+  const markRoleSeen = useCallback(async () => {
+    try {
+      await playerApi.markRoleSeen();
+      setPlayer((prev) => prev ? { ...prev, role_seen: 1 } : prev);
+    } catch {
+      // Ignore errors — localStorage fallback still works
+    }
+  }, []);
+
   const fetchWolves = useCallback(async () => {
     try {
       const data = await playerApi.getWolves();
@@ -467,6 +476,7 @@ export function PlayerProvider({ children }) {
     ghostIdentify,
     submitSpecialResponse,
     fetchWolves,
+    markRoleSeen,
     clearError,
     clearPhaseResult,
     setTimerDuration,

@@ -1,8 +1,0 @@
-- Les loups ne marquent pas de point quand ils font partie de l'équipe gagnante à une épreuve. 
-- Ne pas afficher le timer de parole sur les pages individuelles
-- Quand on ferme les votes, on revient sur la page du conseil du village avec l'ordre de passage.
-- Quand il y a égalité au conseil, il y a marqué qu'il n'y a pas de maire alors qu'il y en a un
-- Sur la page des votes du conseil, il y a la scrollbar, c'est moche. C'est mieux de la cacher.
-- Dans l'historique, la Nuit #1 est toujours marquée "voting" alors que c'est fini
-- L'affichage du résultat du vote ne dis pas qui a été tué par les loup et qui a été tué par les fantomes.
-- Dans l'historique on ne voit pas les votes des fantomes villageois qui essaye de deviner les loups. 

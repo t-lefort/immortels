@@ -29,6 +29,7 @@ export function getDb() {
   db.pragma('foreign_keys = ON');
 
   initSchema();
+  runMigrations();
   initDefaultSettings();
 
   return db;
@@ -55,7 +56,8 @@ function initSchema() {
       eliminated_at_phase INTEGER DEFAULT NULL,
       eliminated_by      TEXT    DEFAULT NULL,           -- 'wolves' | 'ghosts' | 'village' | 'chasseur'
       session_token      TEXT    UNIQUE,
-      score              INTEGER NOT NULL DEFAULT 0
+      score              INTEGER NOT NULL DEFAULT 0,
+      role_seen          INTEGER NOT NULL DEFAULT 0      -- 1 = player has seen their role reveal
     );
 
     -- Game phases
@@ -107,6 +109,17 @@ function initSchema() {
       timestamp                DATETIME NOT NULL DEFAULT (datetime('now'))
     );
   `);
+}
+
+/**
+ * Run schema migrations for existing databases.
+ */
+function runMigrations() {
+  // Add role_seen column if it doesn't exist (for existing DBs)
+  const cols = db.prepare("PRAGMA table_info(players)").all();
+  if (!cols.some(c => c.name === 'role_seen')) {
+    db.exec("ALTER TABLE players ADD COLUMN role_seen INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 /**

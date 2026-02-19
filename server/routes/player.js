@@ -183,6 +183,22 @@ router.get('/me', requirePlayer, (req, res) => {
 });
 
 /**
+ * POST /api/player/role-seen
+ * Mark that the player has seen their role reveal. One-time only.
+ */
+router.post('/role-seen', requirePlayer, (req, res) => {
+  const player = req.player;
+  const db = getDb();
+
+  // Only mark if not already seen
+  if (!player.role_seen) {
+    db.prepare('UPDATE players SET role_seen = 1 WHERE id = ?').run(player.id);
+  }
+
+  res.json({ success: true });
+});
+
+/**
  * POST /api/player/vote { targetId }
  * Submit a vote (wolf vote during night, or village council vote).
  * Vote type is determined by the player's role and the current phase type.

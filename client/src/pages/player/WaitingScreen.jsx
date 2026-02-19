@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
-import CountdownTimer from '../../components/CountdownTimer.jsx';
+
 
 // Map special_role keys to French display labels (excluding maire)
 const SPECIAL_ROLE_LABELS = {
@@ -32,7 +32,7 @@ function formatGhostLabel(player) {
  * Former role is shown for ghost (eliminated) players only.
  */
 export default function WaitingScreen() {
-  const { player, players, eliminated, timerDuration, setTimerDuration, connected } = usePlayer();
+  const { player, players, eliminated, connected } = usePlayer();
 
   const isGhost = player?.status === 'ghost';
   const alivePlayers = players.filter((p) => p.status === 'alive');
@@ -55,16 +55,6 @@ export default function WaitingScreen() {
           {isGhost ? 'Fantôme' : 'Vivant'}
         </span>
       </div>
-
-      {/* Timer if active */}
-      {timerDuration && (
-        <div className="mb-6 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-          <CountdownTimer
-            duration={timerDuration}
-            onComplete={() => setTimerDuration(null)}
-          />
-        </div>
-      )}
 
       {/* Waiting message */}
       <div className="text-center mb-8">

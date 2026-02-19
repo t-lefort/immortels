@@ -178,6 +178,7 @@ function sendPlayerStateSync(socket, player) {
       specialRole: player.special_role,
       status: player.status,
       score: player.score,
+      role_seen: player.role_seen,
     },
     hasVoted,
     voteCount,

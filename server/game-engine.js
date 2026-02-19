@@ -383,9 +383,9 @@ export function resolveVillageCouncil(phaseId) {
     "SELECT * FROM votes WHERE phase_id = ? AND vote_type = 'village' AND is_valid = 1 AND target_id IS NOT NULL"
   ).all(phaseId);
 
-  // Tally with mayor double vote
-  const mayorIdStr = getSetting('mayor_id');
-  const mayorId = mayorIdStr ? Number(mayorIdStr) : null;
+  // Tally with mayor double vote — look up directly from players table
+  const mayor = db.prepare("SELECT id FROM players WHERE special_role = 'maire' AND status = 'alive'").get();
+  const mayorId = mayor ? mayor.id : null;
 
   const counts = {};
   for (const vote of votes) {

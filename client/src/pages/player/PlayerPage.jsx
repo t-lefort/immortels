@@ -42,29 +42,8 @@ export default function PlayerPage() {
   // Track if the player has seen the "eliminated" screen this session
   const [eliminatedAcknowledged, setEliminatedAcknowledged] = useState(false);
 
-  // Track if role reveal was seen (localStorage-based, handled inside RoleRevealScreen)
-  const [roleRevealDismissed, setRoleRevealDismissed] = useState(false);
-
-  // Check role reveal status on mount and when player changes
-  useEffect(() => {
-    if (player?.id) {
-      const seen = localStorage.getItem(`role_seen_${player.id}`);
-      setRoleRevealDismissed(!!seen);
-    }
-  }, [player?.id]);
-
-  // Poll for role reveal dismissal (since localStorage doesn't trigger re-renders)
-  useEffect(() => {
-    if (roleRevealDismissed || !player?.id) return;
-    const interval = setInterval(() => {
-      const seen = localStorage.getItem(`role_seen_${player.id}`);
-      if (seen) {
-        setRoleRevealDismissed(true);
-        clearInterval(interval);
-      }
-    }, 300);
-    return () => clearInterval(interval);
-  }, [roleRevealDismissed, player?.id]);
+  // Role reveal is tracked server-side via player.role_seen
+  const roleRevealDismissed = !!player?.role_seen;
 
   // Reset eliminated acknowledgment when player status changes to ghost
   // (so we show the transition once)

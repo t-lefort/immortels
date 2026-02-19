@@ -37,6 +37,10 @@ export function getMe() {
   return request(`${PLAYER_BASE}/me`);
 }
 
+export function markRoleSeen() {
+  return request(`${PLAYER_BASE}/role-seen`, { method: 'POST' });
+}
+
 // ─── Game State ──────────────────────────────────────────────────────────────
 
 export function getGameState() {
