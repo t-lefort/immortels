@@ -1,5 +1,6 @@
 import { getDb, getSetting, setSetting } from './db.js';
 import logger from './logger.js';
+import { recordScoreSnapshot } from './score-snapshots.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -539,6 +540,8 @@ export function computePhaseScores(phaseId) {
   const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
   if (!phase) throw new Error(`Phase ${phaseId} not found`);
 
+  recordScoreSnapshot('phase_scores', { phaseId, phaseType: phase.type });
+
   const changes = [];
   const addScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
 
@@ -664,6 +667,8 @@ export function computeChallengeScores(challengeId) {
   const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(challengeId);
   if (!challenge) throw new Error(`Challenge ${challengeId} not found`);
 
+  recordScoreSnapshot('challenge_scores', { challengeId });
+
   let winningPlayerIds;
   try {
     winningPlayerIds = JSON.parse(challenge.winning_team_player_ids);
@@ -698,6 +703,7 @@ export function computeChallengeScores(challengeId) {
  */
 export function computeFinalScores(winner) {
   const db = getDb();
+  recordScoreSnapshot('final_scores', { winner });
   const winningRole = winner === 'wolves' ? 'wolf' : 'villager';
   const survivors = db.prepare(
     "SELECT id, name FROM players WHERE status = 'alive' AND role = ?"

@@ -5,10 +5,14 @@ export default function HistoryTab() {
   const [phases, setPhases] = useState([]);
   const [selectedPhase, setSelectedPhase] = useState(null);
   const [voteData, setVoteData] = useState(null);
+  const [scoreSnapshots, setScoreSnapshots] = useState([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
 
   useEffect(() => {
     loadPhases();
+    loadScoreSnapshots();
   }, []);
 
   async function loadPhases() {
@@ -28,8 +32,115 @@ export default function HistoryTab() {
     setLoading(false);
   }
 
+  async function loadScoreSnapshots() {
+    setLoadingSnapshots(true);
+    try {
+      const data = await api.getScoreSnapshots(200);
+      setScoreSnapshots(Array.isArray(data) ? data : []);
+    } catch {
+      setScoreSnapshots([]);
+    }
+    setLoadingSnapshots(false);
+  }
+
+  function selectSnapshot(snapshot) {
+    setSelectedSnapshot(snapshot);
+  }
+
   return (
     <div className="space-y-4">
+      {/* Score snapshots */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Snapshots de score ({scoreSnapshots.length})</h2>
+          <button
+            onClick={loadScoreSnapshots}
+            className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 border border-gray-700"
+          >
+            Rafraîchir
+          </button>
+        </div>
+
+        {loadingSnapshots ? (
+          <p className="text-gray-500 text-sm">Chargement...</p>
+        ) : scoreSnapshots.length === 0 ? (
+          <p className="text-gray-500 text-sm">Aucun snapshot</p>
+        ) : (
+          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+            {scoreSnapshots.map((snapshot) => (
+              <button
+                key={snapshot.id}
+                onClick={() => selectSnapshot(snapshot)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  selectedSnapshot?.id === snapshot.id
+                    ? 'bg-gray-700 text-white'
+                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{snapshotReasonLabel(snapshot.reason)}</span>
+                  <span className="text-xs text-gray-500">#{snapshot.id}</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {formatSnapshotTime(snapshot.createdAt)}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selectedSnapshot && (
+        <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+          <h2 className="text-lg font-semibold mb-1">
+            Détail snapshot #{selectedSnapshot.id}
+          </h2>
+          <p className="text-xs text-gray-500 mb-3">
+            {formatSnapshotTime(selectedSnapshot.createdAt)} • {snapshotReasonLabel(selectedSnapshot.reason)}
+          </p>
+
+          {selectedSnapshot.context && Object.keys(selectedSnapshot.context).length > 0 && (
+            <div className="mb-3 text-xs text-gray-400 bg-gray-800/50 border border-gray-700 rounded p-2 overflow-x-auto">
+              <code>{JSON.stringify(selectedSnapshot.context)}</code>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-800 text-gray-400 text-left">
+                  <th className="px-2 py-1">#</th>
+                  <th className="px-2 py-1">Nom</th>
+                  <th className="px-2 py-1">Rôle</th>
+                  <th className="px-2 py-1">Statut</th>
+                  <th className="px-2 py-1 text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(selectedSnapshot.scores || []).map((p, i) => (
+                  <tr key={`${selectedSnapshot.id}-${p.id}-${i}`} className="border-b border-gray-800/50">
+                    <td className="px-2 py-1 text-gray-500">{i + 1}</td>
+                    <td className="px-2 py-1 text-white">{p.name}</td>
+                    <td className="px-2 py-1 text-gray-400">
+                      {p.role || '—'}{p.special_role ? ` (${p.special_role})` : ''}
+                    </td>
+                    <td className="px-2 py-1 text-gray-400">{p.status || '—'}</td>
+                    <td className="px-2 py-1 text-right text-white font-medium">{p.score ?? 0}</td>
+                  </tr>
+                ))}
+                {(selectedSnapshot.scores || []).length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="px-2 py-3 text-center text-gray-500">
+                      Aucun score enregistré
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Phase List */}
       <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
         <h2 className="text-lg font-semibold mb-3">Phases ({phases.length})</h2>
@@ -163,6 +274,26 @@ export default function HistoryTab() {
       )}
     </div>
   );
+}
+
+function formatSnapshotTime(value) {
+  if (!value) return 'Date inconnue';
+  const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('fr-FR');
+}
+
+function snapshotReasonLabel(reason) {
+  const labels = {
+    phase_scores: 'Scores de phase',
+    challenge_scores: 'Scores d’épreuve',
+    final_scores: 'Scores fin de partie',
+    admin_score_override: 'Modification manuelle admin',
+    phase_undo_scores: 'Annulation de phase',
+    hunter_score: 'Score chasseur',
+  };
+  return labels[reason] || reason || 'Snapshot';
 }
 
 function TallySection({ title, results, color }) {

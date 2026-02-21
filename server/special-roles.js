@@ -12,6 +12,7 @@ import {
   updatePlayerRooms,
 } from './socket-rooms.js';
 import logger from './logger.js';
+import { recordScoreSnapshot } from './score-snapshots.js';
 
 // ─── Maire (Mayor) ──────────────────────────────────────────────────────────
 
@@ -503,6 +504,12 @@ export function processChasseurResponse(io, targetId, phaseId) {
   }
 
   if (scoreDelta !== 0 && hunterId) {
+    recordScoreSnapshot('hunter_score', {
+      hunterId,
+      targetId: Number(targetId),
+      scoreDelta,
+      scoreReason,
+    });
     db.prepare('UPDATE players SET score = score + ? WHERE id = ?').run(scoreDelta, hunterId);
   }
 

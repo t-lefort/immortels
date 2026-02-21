@@ -36,7 +36,7 @@ export function getDb() {
 }
 
 /**
- * Create all 7 tables if they don't exist.
+ * Create all tables if they don't exist.
  */
 function initSchema() {
   db.exec(`
@@ -107,6 +107,15 @@ function initSchema() {
       special_role_awarded     TEXT    NOT NULL,              -- 'maire' | 'sorciere' | etc.
       awarded_to_player_id     INTEGER          REFERENCES players(id),
       timestamp                DATETIME NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Score snapshots (before each score mutation)
+    CREATE TABLE IF NOT EXISTS score_snapshots (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
+      reason       TEXT NOT NULL,
+      context_json TEXT NOT NULL DEFAULT '{}',
+      scores_json  TEXT NOT NULL
     );
   `);
 }
@@ -196,6 +205,7 @@ export function getAllSettings() {
 export function resetGame() {
   const database = getDb();
   database.exec(`
+    DELETE FROM score_snapshots;
     DELETE FROM ghost_identifications;
     DELETE FROM phase_victims;
     DELETE FROM votes;

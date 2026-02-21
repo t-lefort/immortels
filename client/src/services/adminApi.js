@@ -223,6 +223,10 @@ export function getScoreboard() {
   return request('/scoreboard');
 }
 
+export function getScoreSnapshots(limit = 100) {
+  return request(`/score-snapshots?limit=${limit}`);
+}
+
 export function endGame(winner) {
   return request('/game/end', {
     method: 'POST',

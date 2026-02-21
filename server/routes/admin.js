@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { adminAuth } from '../middleware/auth.js';
 import { getDb, getAllSettings, getSetting, setSetting, resetGame } from '../db.js';
 import logger from '../logger.js';
+import { recordScoreSnapshot, listScoreSnapshots } from '../score-snapshots.js';
 import {
   assignRoles,
   createPhase,
@@ -1040,6 +1041,14 @@ router.put('/player/:id', (req, res) => {
     updates.name = updates.name.trim();
   }
 
+  if (updates.score !== undefined && updates.score !== player.score) {
+    recordScoreSnapshot('admin_score_override', {
+      playerId: id,
+      previousScore: player.score,
+      newScore: updates.score,
+    });
+  }
+
   const setClauses = Object.keys(updates).map(f => `${f} = ?`).join(', ');
   const values = Object.values(updates);
 
@@ -1081,6 +1090,10 @@ router.post('/phase/undo', (req, res) => {
   if (scoreChangesJson) {
     try {
       const scoreChanges = JSON.parse(scoreChangesJson);
+      recordScoreSnapshot('phase_undo_scores', {
+        phaseId: phaseIdNum,
+        scoreChangesCount: Array.isArray(scoreChanges) ? scoreChanges.length : 0,
+      });
       const revertScore = db.prepare('UPDATE players SET score = score - ? WHERE id = ?');
       for (const change of scoreChanges) {
         revertScore.run(change.delta, change.playerId);
@@ -1267,6 +1280,14 @@ router.get('/challenges', (req, res) => {
 
 router.get('/scoreboard', (req, res) => {
   res.json(getScoreboard());
+});
+
+router.get('/score-snapshots', (req, res) => {
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0
+    ? Math.min(rawLimit, 500)
+    : 100;
+  res.json(listScoreSnapshots(limit));
 });
 
 router.post('/game/end', (req, res) => {
