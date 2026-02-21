@@ -92,15 +92,17 @@ export function emitToAdmin(io, event, data) {
 }
 
 /**
- * Update a player's room memberships when their status changes.
- * When a player becomes a ghost:
- *   - join the ghosts room
- * When a player is resurrected (back to alive):
- *   - leave the ghosts room
+ * Update a player's room memberships when status and/or role changes.
+ * Status update:
+ *   - 'ghost' -> join ghosts room
+ *   - 'alive' -> leave ghosts room
+ * Role update:
+ *   - 'wolf'  -> join wolves room
+ *   - any other role/null -> leave wolves room
  *
  * This updates ALL sockets associated with that player (in case of multiple tabs).
  */
-export function updatePlayerRooms(io, playerId, newStatus) {
+export function updatePlayerRooms(io, playerId, newStatus, newRole = undefined) {
   const room = `player:${playerId}`;
   const playerSockets = io.sockets.adapter.rooms.get(room);
   if (!playerSockets) return;
@@ -113,6 +115,14 @@ export function updatePlayerRooms(io, playerId, newStatus) {
       socket.join('ghosts');
     } else if (newStatus === 'alive') {
       socket.leave('ghosts');
+    }
+
+    if (newRole !== undefined) {
+      if (newRole === 'wolf') {
+        socket.join('wolves');
+      } else {
+        socket.leave('wolves');
+      }
     }
   }
 }

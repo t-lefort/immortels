@@ -425,15 +425,29 @@ router.post('/phase/reveal', (req, res) => {
   }
 
   const db = getDb();
-  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  const phaseIdNum = Number(phaseId);
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseIdNum);
   if (!phase) {
     return res.status(404).json({ error: 'Phase introuvable' });
+  }
+
+  // Idempotency guard: a phase can only be revealed once.
+  // Using an UPSERT allows undo to reset the key to NULL and enable reveal again.
+  const revealKey = `phase_revealed_${phaseIdNum}`;
+  const revealLock = db.prepare(`
+    INSERT INTO game_settings (key, value) VALUES (?, '1')
+    ON CONFLICT(key) DO UPDATE SET value = '1'
+    WHERE game_settings.value IS NULL
+  `).run(revealKey);
+  if (revealLock.changes === 0) {
+    return res.status(409).json({ error: 'Cette phase a déjà été révélée' });
   }
 
   const io = req.app.get('io');
   const eliminated = [];
 
   const immuneApplied = [];
+  const immunityConsumedPlayerIds = [];
 
   // Apply eliminations if provided
   if (victims && Array.isArray(victims)) {
@@ -441,15 +455,16 @@ router.post('/phase/reveal', (req, res) => {
       try {
         // Check immunity before eliminating (only applies to village council)
         if (phase.type === 'village_council') {
-          const immuneResult = handleImmunite(Number(phaseId), victim.playerId);
+          const immuneResult = handleImmunite(phaseIdNum, victim.playerId);
           if (immuneResult.applied) {
             immuneApplied.push({ playerId: victim.playerId, playerName: immuneResult.playerName });
+            immunityConsumedPlayerIds.push(Number(victim.playerId));
             logger.special('Immunity applied', { playerId: victim.playerId, playerName: immuneResult.playerName });
             continue; // Skip elimination — player is immune
           }
         }
 
-        const player = eliminatePlayer(victim.playerId, Number(phaseId), victim.eliminatedBy);
+        const player = eliminatePlayer(victim.playerId, phaseIdNum, victim.eliminatedBy);
         eliminated.push(player);
         logger.phase('Player eliminated via reveal', { playerId: player.id, playerName: player.name, eliminatedBy: victim.eliminatedBy });
 
@@ -472,14 +487,14 @@ router.post('/phase/reveal', (req, res) => {
   // Compute phase scores
   let scoreChanges = [];
   try {
-    scoreChanges = computePhaseScores(Number(phaseId));
+    scoreChanges = computePhaseScores(phaseIdNum);
     if (scoreChanges.length > 0) {
-      logger.score('Phase scores computed', { phaseId: Number(phaseId), changes: scoreChanges.length });
+      logger.score('Phase scores computed', { phaseId: phaseIdNum, changes: scoreChanges.length });
       // Store score changes so phase/undo can revert them
-      setSetting(`score_changes_phase_${phaseId}`, JSON.stringify(scoreChanges));
+      setSetting(`score_changes_phase_${phaseIdNum}`, JSON.stringify(scoreChanges));
     }
   } catch (err) {
-    logger.error('Could not compute phase scores', { phaseId: Number(phaseId), error: err.message });
+    logger.error('Could not compute phase scores', { phaseId: phaseIdNum, error: err.message });
   }
 
   if (io) {
@@ -493,7 +508,7 @@ router.post('/phase/reveal', (req, res) => {
     // For village council phases, include individual vote details for the dashboard vote reveal
     let councilVotes = null;
     if (phase.type === 'village_council') {
-      councilVotes = getVoteDetails(Number(phaseId))
+      councilVotes = getVoteDetails(phaseIdNum)
         .filter(v => v.vote_type === 'village')
         .map(v => ({
           voterName: v.voter_name,
@@ -538,6 +553,11 @@ router.post('/phase/reveal', (req, res) => {
 
   // Clear current phase
   setSetting('current_phase_id', null);
+  if (immunityConsumedPlayerIds.length > 0) {
+    setSetting(`immunity_used_phase_${phaseIdNum}`, JSON.stringify(immunityConsumedPlayerIds));
+  } else {
+    setSetting(`immunity_used_phase_${phaseIdNum}`, null);
+  }
 
   res.json({ phase, eliminated, scoreChanges, immuneApplied });
 });
@@ -1027,10 +1047,12 @@ router.put('/player/:id', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
 
-  // If status changed, update room memberships
+  // If status and/or role changed, update room memberships
   const io = req.app.get('io');
-  if (io && updates.status && updates.status !== player.status) {
-    updatePlayerRooms(io, id, updates.status);
+  if (io && (updates.status !== undefined || updates.role !== undefined)) {
+    const newStatus = updates.status !== undefined ? updates.status : player.status;
+    const newRole = updates.role !== undefined ? updates.role : player.role;
+    updatePlayerRooms(io, id, newStatus, newRole);
   }
 
   // Re-sync the affected player
@@ -1047,14 +1069,15 @@ router.post('/phase/undo', (req, res) => {
     return res.status(400).json({ error: 'phaseId requis' });
   }
 
+  const phaseIdNum = Number(phaseId);
   const db = getDb();
-  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(Number(phaseId));
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseIdNum);
   if (!phase) {
     return res.status(404).json({ error: 'Phase introuvable' });
   }
 
   // Revert score changes from this phase
-  const scoreChangesJson = getSetting(`score_changes_phase_${phaseId}`);
+  const scoreChangesJson = getSetting(`score_changes_phase_${phaseIdNum}`);
   if (scoreChangesJson) {
     try {
       const scoreChanges = JSON.parse(scoreChangesJson);
@@ -1062,18 +1085,34 @@ router.post('/phase/undo', (req, res) => {
       for (const change of scoreChanges) {
         revertScore.run(change.delta, change.playerId);
       }
-      setSetting(`score_changes_phase_${phaseId}`, null);
-      logger.score('Phase scores reverted via undo', { phaseId: Number(phaseId), changes: scoreChanges.length });
+      setSetting(`score_changes_phase_${phaseIdNum}`, null);
+      logger.score('Phase scores reverted via undo', { phaseId: phaseIdNum, changes: scoreChanges.length });
     } catch (err) {
-      logger.error('Could not revert phase scores', { phaseId: Number(phaseId), error: err.message });
+      logger.error('Could not revert phase scores', { phaseId: phaseIdNum, error: err.message });
     }
   }
 
   // Revert phase to active state
-  db.prepare("UPDATE phases SET status = 'active', timestamp_end = NULL WHERE id = ?").run(Number(phaseId));
+  db.prepare("UPDATE phases SET status = 'active', timestamp_end = NULL WHERE id = ?").run(phaseIdNum);
+
+  // Restore immunity consumed during phase reveal
+  const immunityUsedJson = getSetting(`immunity_used_phase_${phaseIdNum}`);
+  if (immunityUsedJson) {
+    try {
+      const immunityPlayerIds = JSON.parse(immunityUsedJson);
+      if (Array.isArray(immunityPlayerIds) && immunityPlayerIds.length > 0) {
+        const restoreImmunity = db.prepare("UPDATE players SET special_role = 'immunite' WHERE id = ?");
+        for (const pid of immunityPlayerIds) {
+          restoreImmunity.run(Number(pid));
+        }
+      }
+    } catch (err) {
+      logger.error('Could not restore immunity on undo', { phaseId: phaseIdNum, error: err.message });
+    }
+  }
 
   // Restore victims from this phase
-  const victims = db.prepare('SELECT * FROM phase_victims WHERE phase_id = ?').all(Number(phaseId));
+  const victims = db.prepare('SELECT * FROM phase_victims WHERE phase_id = ?').all(phaseIdNum);
   const io = req.app.get('io');
 
   for (const victim of victims) {
@@ -1086,11 +1125,13 @@ router.post('/phase/undo', (req, res) => {
       updatePlayerRooms(io, victim.player_id, 'alive');
     }
   }
-  db.prepare('DELETE FROM phase_victims WHERE phase_id = ?').run(Number(phaseId));
+  db.prepare('DELETE FROM phase_victims WHERE phase_id = ?').run(phaseIdNum);
 
-  setSetting('current_phase_id', String(phaseId));
+  setSetting('current_phase_id', String(phaseIdNum));
+  setSetting(`phase_revealed_${phaseIdNum}`, null);
+  setSetting(`immunity_used_phase_${phaseIdNum}`, null);
 
-  res.json({ undone: true, phaseId: Number(phaseId), restoredPlayers: victims.length });
+  res.json({ undone: true, phaseId: phaseIdNum, restoredPlayers: victims.length });
 });
 
 router.put('/settings', (req, res) => {
@@ -1234,6 +1275,18 @@ router.post('/game/end', (req, res) => {
   // Validate winner if provided
   if (requestedWinner && !['wolves', 'villagers'].includes(requestedWinner)) {
     return res.status(400).json({ error: 'winner invalide. Valeurs acceptées: wolves, villagers' });
+  }
+
+  const currentStatus = getSetting('game_status');
+  if (currentStatus === 'finished') {
+    const existingWinner = getSetting('game_winner') || null;
+    return res.json({
+      status: 'finished',
+      scoreChanges: [],
+      scoreboard: getScoreboard(),
+      winner: existingWinner,
+      alreadyFinished: true,
+    });
   }
 
   setSetting('game_status', 'finished');
