@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb, getSetting } from '../db.js';
+import { computeVoteCounts } from '../socket-rooms.js';
 
 const router = Router();
 
@@ -22,10 +23,17 @@ router.get('/state', (_req, res) => {
     .prepare('SELECT id, name, status, role, special_role FROM players ORDER BY id')
     .all();
 
+  let voteCount, totalExpected;
+  if (currentPhase && (currentPhase.status === 'voting' || currentPhase.status === 'active')) {
+    ({ voteCount, totalExpected } = computeVoteCounts(currentPhase.id, currentPhase.type));
+  }
+
   res.json({
     gameStatus,
     currentPhase,
     players,
+    voteCount,
+    totalExpected,
   });
 });
 

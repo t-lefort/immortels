@@ -310,6 +310,10 @@ router.post('/phase/start', (req, res) => {
       // Also send to dashboard and admin (non-role-specific)
       emitToDashboard(io, 'phase:started', { phase, phaseType: phase.type });
       emitToAdmin(io, 'phase:started', { phase, phaseType: phase.type });
+
+      // Send initial vote progress so dashboard shows "0/N" instead of "0/0"
+      const { voteCount, totalExpected } = computeVoteCounts(phase.id, phase.type);
+      emitToAll(io, 'phase:vote_update', { phaseId: phase.id, voteCount, totalExpected });
     }
 
     // For night phases, automatically open voting (no separate step needed)
@@ -503,6 +507,7 @@ router.post('/phase/reveal', (req, res) => {
       id: p.id,
       name: p.name,
       role: p.role,
+      special_role: p.special_role,
       eliminatedBy: p.eliminated_by,
     }));
 
@@ -1067,6 +1072,13 @@ router.put('/player/:id', (req, res) => {
   // Re-sync the affected player
   if (io) {
     resyncPlayer(io, id);
+
+    // Broadcast updated player list to all interfaces (admin, dashboard, other players)
+    const allPlayers = db.prepare('SELECT id, name, status, special_role FROM players ORDER BY id').all();
+    const lobbyData = { playerCount: allPlayers.length, players: allPlayers };
+    emitToAdmin(io, 'lobby:update', lobbyData);
+    emitToDashboard(io, 'lobby:update', lobbyData);
+    emitToAll(io, 'lobby:update', lobbyData);
   }
 
   res.json(updated);

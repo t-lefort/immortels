@@ -479,8 +479,14 @@ export function processChasseurResponse(io, targetId, phaseId) {
   const hunterPlayerIdStr = getSetting('hunter_player_id');
   const hunterId = hunterPlayerIdStr ? Number(hunterPlayerIdStr) : null;
 
-  // Determine phase for the elimination record
-  const effectivePhaseId = phaseId || (getCurrentPhase()?.id) || null;
+  // Determine phase for the elimination record.
+  // The hunter responds asynchronously — by that time current_phase_id may
+  // already be cleared. Fall back to the most recent phase in the DB.
+  let effectivePhaseId = phaseId || (getCurrentPhase()?.id) || null;
+  if (!effectivePhaseId) {
+    const lastPhase = db.prepare('SELECT id FROM phases ORDER BY id DESC LIMIT 1').get();
+    effectivePhaseId = lastPhase?.id || null;
+  }
 
   // Eliminate the target
   const victim = eliminatePlayer(Number(targetId), effectivePhaseId, 'chasseur');

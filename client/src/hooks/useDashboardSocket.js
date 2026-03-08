@@ -277,6 +277,9 @@ export function useDashboardSocket() {
             setOverlay('council');
           }
         }
+        if (data.voteCount !== undefined && data.totalExpected !== undefined) {
+          setVoteProgress({ count: data.voteCount, total: data.totalExpected });
+        }
       })
       .catch(() => {
         // Silently ignore — socket state:sync will fill in data

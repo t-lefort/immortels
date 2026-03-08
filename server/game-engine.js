@@ -308,9 +308,14 @@ export function resolveNight(phaseId) {
   let wolfVictim = null;
   let wolfVoteTie = false;
 
+  let wolfTiedPlayers = [];
+
   if (wolfResults.length > 0) {
     if (wolfResults.length > 1 && wolfResults[0].count === wolfResults[1].count) {
       wolfVoteTie = true;
+      wolfTiedPlayers = wolfResults
+        .filter(r => r.count === wolfResults[0].count)
+        .map(r => ({ targetId: r.targetId, targetName: r.targetName, count: r.count }));
     } else {
       wolfVictim = { id: wolfResults[0].targetId, name: wolfResults[0].targetName };
     }
@@ -356,6 +361,7 @@ export function resolveNight(phaseId) {
     wolfResults,
     wolfVictim,
     wolfVoteTie,
+    wolfTiedPlayers,
     ghostResults,
     ghostVictim,
     protectedPlayerId,

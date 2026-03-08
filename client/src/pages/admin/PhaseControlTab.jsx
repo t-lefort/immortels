@@ -684,10 +684,16 @@ function VoteSection({ title, results, color }) {
 }
 
 function NightResultsPanel({ results, currentPhase, players, loading, onReveal }) {
+  const [wolfTieSelection, setWolfTieSelection] = useState(null);
+
+  const needsWolfTieBreak = results.wolfVoteTie && results.wolfTiedPlayers?.length > 1;
+
   const victims = [];
 
-  // Wolf victim
-  if (results.wolfVictim && !results.wolfVictimProtected) {
+  // Wolf victim (from vote or admin tie-break)
+  if (needsWolfTieBreak && wolfTieSelection) {
+    victims.push({ playerId: wolfTieSelection.targetId, eliminatedBy: 'wolves' });
+  } else if (results.wolfVictim && !results.wolfVictimProtected) {
     victims.push({ playerId: results.wolfVictim.id, eliminatedBy: 'wolves' });
   }
 
@@ -704,8 +710,13 @@ function NightResultsPanel({ results, currentPhase, players, loading, onReveal }
         {/* Wolf vote result */}
         <div className="flex items-center gap-2">
           <span className="text-red-400 font-medium">Loups :</span>
-          {results.wolfVoteTie ? (
-            <span className="text-yellow-400">Égalité ! L'admin doit trancher.</span>
+          {results.wolfVoteTie && !wolfTieSelection ? (
+            <span className="text-yellow-400">Égalité — voir ci-dessous</span>
+          ) : results.wolfVoteTie && wolfTieSelection ? (
+            <span>
+              <span className="text-white">{wolfTieSelection.targetName}</span>
+              <span className="text-yellow-400 ml-1">(choix de l'admin)</span>
+            </span>
           ) : results.wolfVictim ? (
             <span>
               <span className="text-white">{results.wolfVictim.name}</span>
@@ -761,16 +772,51 @@ function NightResultsPanel({ results, currentPhase, players, loading, onReveal }
         )}
       </div>
 
+      {/* Wolf tie-break */}
+      {needsWolfTieBreak && (
+        <div className="mt-3 p-3 bg-yellow-900/30 border border-yellow-800 rounded-lg">
+          <div className="text-yellow-400 font-medium mb-2">
+            Égalité des loups ! L'admin doit trancher :
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {results.wolfTiedPlayers.map((p) => (
+              <button
+                key={p.targetId}
+                onClick={() => setWolfTieSelection(p)}
+                className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                  wolfTieSelection?.targetId === p.targetId
+                    ? 'bg-red-700 text-white ring-2 ring-red-400'
+                    : 'bg-gray-700 text-white hover:bg-gray-600'
+                }`}
+              >
+                {p.targetName} ({p.count} votes)
+              </button>
+            ))}
+          </div>
+          {wolfTieSelection && (
+            <div className="mt-2 text-sm text-red-300">
+              Choix : <span className="font-bold">{wolfTieSelection.targetName}</span> sera la victime des loups.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Reveal button */}
       <div className="mt-4 pt-4 border-t border-gray-800">
-        <div className="text-xs text-gray-400 mb-2">
-          {victims.length > 0
-            ? `${victims.length} victime(s) à éliminer`
-            : 'Aucune victime cette nuit'}
-        </div>
+        {needsWolfTieBreak && !wolfTieSelection ? (
+          <div className="text-xs text-yellow-400 mb-2">
+            Sélectionnez un joueur ci-dessus pour pouvoir révéler les résultats.
+          </div>
+        ) : (
+          <div className="text-xs text-gray-400 mb-2">
+            {victims.length > 0
+              ? `${victims.length} victime(s) à éliminer`
+              : 'Aucune victime cette nuit'}
+          </div>
+        )}
         <button
           onClick={() => onReveal(victims)}
-          disabled={!!loading}
+          disabled={!!loading || (needsWolfTieBreak && !wolfTieSelection)}
           className="px-4 py-2 bg-wolf text-white rounded-lg hover:bg-red-800 disabled:opacity-50 font-medium text-sm"
         >
           Révéler les résultats

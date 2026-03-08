@@ -325,6 +325,12 @@ export function PlayerProvider({ children }) {
         if (data && data.winner) setWinner(data.winner);
       }),
 
+      on('lobby:update', (data) => {
+        if (data.players) {
+          setPlayers(data.players);
+        }
+      }),
+
       on('game:reset', () => {
         setGameStatus('setup');
         setCurrentPhase(null);
@@ -377,11 +383,12 @@ export function PlayerProvider({ children }) {
         if (data.eliminated) {
           setEliminated((prev) => [...prev, ...data.eliminated]);
           // Update players array so eliminated players show as ghost
-          const eliminatedIds = new Set(data.eliminated.map((e) => e.id));
+          const eliminatedMap = new Map(data.eliminated.map((e) => [e.id, e]));
           setPlayers((prev) =>
-            prev.map((p) =>
-              eliminatedIds.has(p.id) ? { ...p, status: 'ghost' } : p
-            )
+            prev.map((p) => {
+              const elim = eliminatedMap.get(p.id);
+              return elim ? { ...p, status: 'ghost', role: elim.role, special_role: elim.special_role } : p;
+            })
           );
           // Refresh player data to update own status if eliminated
           playerApi.getMe().then((me) => {
@@ -399,9 +406,10 @@ export function PlayerProvider({ children }) {
         setEliminated((prev) => [...prev, data.player]);
         // Update players array so eliminated player shows as ghost
         if (data.player?.id) {
+          const ep = data.player;
           setPlayers((prev) =>
             prev.map((p) =>
-              p.id === data.player.id ? { ...p, status: 'ghost' } : p
+              p.id === ep.id ? { ...p, status: 'ghost', role: ep.role, special_role: ep.special_role } : p
             )
           );
         }

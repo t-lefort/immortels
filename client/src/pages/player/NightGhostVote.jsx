@@ -127,8 +127,8 @@ export default function NightGhostVote() {
         </>
       )}
 
-      {/* ─── Wolf Identification (villager ghosts only) ─────────────────── */}
-      {isVillagerGhost && (
+      {/* ─── Wolf Identification (villager ghosts only, after elimination vote) ── */}
+      {isVillagerGhost && alreadyVoted && (
         <div className="mt-6">
           <div className="border-t border-gray-800 pt-6 mb-4">
             <h3 className="text-gray-300 font-semibold text-sm uppercase tracking-wider mb-1">
