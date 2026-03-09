@@ -1,7 +1,0 @@
-* Si égalité des loups, dis que l'admin doit trancher, mais aucun moyen de le faire vraiment.
-* Si admin met à jour le status d'un joueur (fantome, vivant), ne s'actualise sur les interfaces indviduelles que pour cette personne. Les autres doivent rafraichir la page pour le voir. Pareil pour la page dashboard
-* Avant que la première personne vote sur le dashboard il y a écris 0/0. Ca se résoud une fois que la première personne a voté
-* Sur la page individuelle de vote, pour les fantomes, c'est bizarre que le bouton pour valider le vote pour éliminer soit ne dessous du bouton et de la section pour identifier les loups.
-- Quand je clique sur "Activer" pour la voyante le protecteur ou la sorcière dans la page admin, il y a un message d'erreur qui s'affiche "power requis" alors qu'il y a bien un joueur qui est voyante
-* A la fin de la nuit, quand les personnes sont éliminés, sur les pages individuelles quand on revient au tableau de base avec le nombre de vivant/fantome et la liste des morts, ça affiche les nouveaux fantomes dans la liste mais pas leur rôle, il faut rafraichir la page pour que ça s'affiche correctement.
-* L'interface du chasseur s'affiche bien quand il meure (par dessus l'explication quand on meurt en transparence, ça serait mieux sans transparene) mais quand on valide elle reste affichée et il ne se passe rien.

@@ -77,6 +77,27 @@ export default function SettingsTab({ refreshPlayers }) {
         </div>
       )}
 
+      {/* Dashboard Control */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <h2 className="text-lg font-semibold mb-2">Dashboard</h2>
+        <p className="text-sm text-gray-400 mb-3">
+          Force le retour du dashboard sur l'ecran de base (liste des joueurs en vie / morts).
+        </p>
+        <button
+          onClick={async () => {
+            try {
+              await api.dashboardForceHome();
+              setMessage({ type: 'success', text: 'Dashboard reinitialise' });
+            } catch (err) {
+              setMessage({ type: 'error', text: err.message });
+            }
+          }}
+          className="px-4 py-2 bg-villager text-white rounded-lg hover:bg-blue-800 text-sm font-medium"
+        >
+          Retour ecran de base
+        </button>
+      </div>
+
       {/* Test Mode Section */}
       <div className="bg-yellow-950/30 rounded-lg p-4 border border-yellow-900/50">
         <h2 className="text-lg font-semibold text-yellow-400 mb-3">Mode test</h2>

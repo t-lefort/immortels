@@ -13,7 +13,7 @@ const SPECIAL_ROLES = [
 export default function ChallengesTab({ players, refreshPlayers }) {
   const [challenges, setChallenges] = useState([]);
   const [name, setName] = useState('');
-  const [specialRole, setSpecialRole] = useState('maire');
+  const [specialRole, setSpecialRole] = useState('');
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [assignPlayerId, setAssignPlayerId] = useState('');
   const [loading, setLoading] = useState('');
@@ -41,7 +41,7 @@ export default function ChallengesTab({ players, refreshPlayers }) {
     try {
       await api.createChallenge({
         name: name.trim(),
-        specialRole,
+        specialRole: specialRole || null,
         winningPlayerIds: selectedPlayers,
       });
       setName('');
@@ -177,6 +177,7 @@ export default function ChallengesTab({ players, refreshPlayers }) {
               onChange={(e) => setSpecialRole(e.target.value)}
               className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none"
             >
+              <option value="">Aucun (points uniquement)</option>
               {SPECIAL_ROLES.map(r => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
@@ -228,35 +229,37 @@ export default function ChallengesTab({ players, refreshPlayers }) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-white font-medium">{ch.name}</span>
                   <span className="text-xs px-2 py-0.5 bg-gray-700 rounded text-gray-300">
-                    {ch.special_role_awarded}
+                    {ch.special_role_awarded || 'Points uniquement'}
                   </span>
                 </div>
 
-                {ch.awarded_to_player_id ? (
-                  <div className="text-sm text-green-400">
-                    Attribué à {players.find(p => p.id === ch.awarded_to_player_id)?.name || `#${ch.awarded_to_player_id}`}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={assignPlayerId}
-                      onChange={(e) => setAssignPlayerId(e.target.value)}
-                      className="flex-1 px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-white text-sm"
-                    >
-                      <option value="">Choisir un joueur...</option>
-                      {availablePlayers.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleAssign(ch.id)}
-                      disabled={!assignPlayerId || loading === 'assign'}
-                      className="px-3 py-1.5 bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50 text-sm"
-                    >
-                      Attribuer
-                    </button>
-                  </div>
-                )}
+                {ch.special_role_awarded ? (
+                  ch.awarded_to_player_id ? (
+                    <div className="text-sm text-green-400">
+                      Attribué à {players.find(p => p.id === ch.awarded_to_player_id)?.name || `#${ch.awarded_to_player_id}`}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={assignPlayerId}
+                        onChange={(e) => setAssignPlayerId(e.target.value)}
+                        className="flex-1 px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-white text-sm"
+                      >
+                        <option value="">Choisir un joueur...</option>
+                        {availablePlayers.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleAssign(ch.id)}
+                        disabled={!assignPlayerId || loading === 'assign'}
+                        className="px-3 py-1.5 bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50 text-sm"
+                      >
+                        Attribuer
+                      </button>
+                    </div>
+                  )
+                ) : null}
               </div>
             ))}
           </div>

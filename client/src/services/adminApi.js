@@ -116,10 +116,10 @@ export function getPhases() {
 
 // ─── Special Powers ─────────────────────────────────────────────────────────
 
-export function triggerSpecialPower(playerId, power) {
+export function triggerSpecialPower(params) {
   return request('/special/trigger', {
     method: 'POST',
-    body: JSON.stringify({ playerId, power }),
+    body: JSON.stringify(params),
   });
 }
 
@@ -170,6 +170,10 @@ export function displayChallenge(name) {
 
 export function clearChallengeDisplay() {
   return request('/challenge/display-clear', { method: 'POST' });
+}
+
+export function dashboardForceHome() {
+  return request('/dashboard/force-home', { method: 'POST' });
 }
 
 export function dismissVoteReveal() {

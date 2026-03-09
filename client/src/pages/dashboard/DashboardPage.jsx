@@ -7,6 +7,7 @@ import CouncilDisplay from './CouncilDisplay.jsx';
 import ResultDisplay from './ResultDisplay.jsx';
 import VoteRevealDisplay from './VoteRevealDisplay.jsx';
 import ChallengeAnnouncementDisplay from './ChallengeAnnouncementDisplay.jsx';
+import HunterKillDisplay from './HunterKillDisplay.jsx';
 import EndDisplay from './EndDisplay.jsx';
 import TimerOverlay from './TimerOverlay.jsx';
 
@@ -30,6 +31,7 @@ export default function DashboardPage() {
     scoreboard,
     winner,
     challengeDisplay,
+    hunterKill,
     councilVotes,
     overlay,
     setOverlay,
@@ -40,6 +42,16 @@ export default function DashboardPage() {
   const handleResultDismiss = useCallback(() => {
     clearOverlay();
   }, [clearOverlay]);
+
+  // Auto-dismiss hunter kill overlay after animation completes
+  useEffect(() => {
+    if (overlay === 'hunter' && hunterKill) {
+      const t = setTimeout(() => {
+        clearOverlay();
+      }, 18000); // generous fallback (component has its own internal timing)
+      return () => clearTimeout(t);
+    }
+  }, [overlay, hunterKill, clearOverlay]);
 
   // Auto-dismiss result after the ResultDisplay internal timer.
   // If this was a village council with vote data, transition to vote_reveal overlay.
@@ -135,6 +147,14 @@ export default function DashboardPage() {
           {overlay === 'challenge' && challengeDisplay && (
             <ChallengeAnnouncementDisplay
               challengeName={challengeDisplay.name}
+            />
+          )}
+
+          {/* Hunter kill overlay */}
+          {overlay === 'hunter' && hunterKill && (
+            <HunterKillDisplay
+              hunterKill={hunterKill}
+              onDismiss={clearOverlay}
             />
           )}
 

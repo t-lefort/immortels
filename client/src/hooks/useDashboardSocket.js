@@ -32,6 +32,9 @@ export function useDashboardSocket() {
   // Challenge display state
   const [challengeDisplay, setChallengeDisplay] = useState(null);
 
+  // Hunter kill display state
+  const [hunterKill, setHunterKill] = useState(null);
+
   // Council vote reveal data (who voted for whom)
   const [councilVotes, setCouncilVotes] = useState(null);
 
@@ -122,6 +125,7 @@ export function useDashboardSocket() {
       setScoreboard(null);
       setWinner(null);
       setChallengeDisplay(null);
+      setHunterKill(null);
       setCouncilVotes(null);
       setOverlay(null);
       setPlayerCount(0);
@@ -220,6 +224,12 @@ export function useDashboardSocket() {
       // Dashboard doesn't show special results
     });
 
+    // ─── Hunter kill display ────────────────────────────────────
+    socket.on('dashboard:hunter_kill', (data) => {
+      setHunterKill(data);
+      setOverlay('hunter');
+    });
+
     // ─── Challenge display ──────────────────────────────────────────
     socket.on('dashboard:challenge', (data) => {
       if (data.name) {
@@ -237,6 +247,16 @@ export function useDashboardSocket() {
     socket.on('dashboard:vote_reveal_dismiss', () => {
       setCouncilVotes(null);
       setOverlay(null);
+    });
+
+    // ─── Force return to base view (player list) ──────────────────
+    socket.on('dashboard:force_home', () => {
+      setOverlay(null);
+      setPhaseResult(null);
+      setEliminatedPlayer(null);
+      setChallengeDisplay(null);
+      setCouncilVotes(null);
+      setTimer(null);
     });
 
     socketRef.current = socket;
@@ -307,6 +327,7 @@ export function useDashboardSocket() {
     scoreboard,
     winner,
     challengeDisplay,
+    hunterKill,
     councilVotes,
     overlay,
     setOverlay,

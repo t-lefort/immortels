@@ -9,6 +9,7 @@ import {
   emitToPlayer,
   emitToAdmin,
   emitToAll,
+  emitToDashboard,
   updatePlayerRooms,
 } from './socket-rooms.js';
 import logger from './logger.js';
@@ -527,6 +528,17 @@ export function processChasseurResponse(io, targetId, phaseId) {
 
   emitToPlayer(io, victim.id, 'player:eliminated', {
     playerId: victim.id,
+  });
+
+  // Get hunter name for dashboard display
+  const hunterPlayer = hunterId
+    ? db.prepare('SELECT name FROM players WHERE id = ?').get(hunterId)
+    : null;
+
+  // Show dramatic hunter kill on dashboard
+  emitToDashboard(io, 'dashboard:hunter_kill', {
+    hunterName: hunterPlayer?.name || 'Chasseur',
+    victim: { id: victim.id, name: victim.name, role: victim.role },
   });
 
   // Send result to admin

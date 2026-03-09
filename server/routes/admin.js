@@ -881,12 +881,12 @@ router.post('/special/skip', (req, res) => {
 router.post('/challenge', (req, res) => {
   const { name, specialRole, winningPlayerIds, afterPhaseId } = req.body;
 
-  if (!name || !specialRole) {
-    return res.status(400).json({ error: 'name et specialRole requis' });
+  if (!name) {
+    return res.status(400).json({ error: 'name requis' });
   }
 
   const validSpecialRoles = ['maire', 'sorciere', 'protecteur', 'voyante', 'chasseur', 'immunite'];
-  if (!validSpecialRoles.includes(specialRole)) {
+  if (specialRole && !validSpecialRoles.includes(specialRole)) {
     return res.status(400).json({ error: `Rôle spécial invalide: ${specialRole}. Valeurs acceptées: ${validSpecialRoles.join(', ')}` });
   }
 
@@ -895,7 +895,7 @@ router.post('/challenge', (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO challenges (name, special_role_awarded, winning_team_player_ids, after_phase_id) VALUES (?, ?, ?, ?)'
-  ).run(name, specialRole, playerIdsJson, afterPhaseId || null);
+  ).run(name, specialRole || '', playerIdsJson, afterPhaseId || null);
 
   const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(result.lastInsertRowid);
 
@@ -921,6 +921,10 @@ router.post('/challenge/assign', (req, res) => {
   const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(Number(challengeId));
   if (!challenge) {
     return res.status(404).json({ error: 'Épreuve introuvable' });
+  }
+
+  if (!challenge.special_role_awarded) {
+    return res.status(400).json({ error: 'Cette épreuve n\'attribue pas de rôle spécial' });
   }
 
   const player = db.prepare('SELECT * FROM players WHERE id = ?').get(Number(playerId));
@@ -983,6 +987,17 @@ router.post('/vote-reveal/dismiss', (req, res) => {
   }
 
   res.json({ dismissed: true });
+});
+
+router.post('/dashboard/force-home', (req, res) => {
+  setSetting('challenge_display_name', null);
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:force_home', {});
+  }
+
+  res.json({ ok: true });
 });
 
 router.post('/challenge/display-clear', (req, res) => {
