@@ -7,6 +7,17 @@ const SPECIAL_ROLE_LABELS = {
   immunite: 'Immunite',
 };
 
+/** Parse comma-separated special_role into array */
+function parseRoles(str) {
+  if (!str) return [];
+  return str.split(',').map(r => r.trim()).filter(Boolean);
+}
+
+/** Check if special_role string contains a given role */
+function hasRole(str, role) {
+  return parseRoles(str).includes(role);
+}
+
 /**
  * Format a ghost player's badge label with their former role.
  * e.g. "Fantome (Villageois)" or "Fantome (Loup, Voyante)"
@@ -14,11 +25,9 @@ const SPECIAL_ROLE_LABELS = {
 function formatGhostLabel(player) {
   if (!player.role) return 'Fantome';
   const roleName = player.role === 'wolf' ? 'Loup' : 'Villageois';
-  const specialLabel =
-    player.special_role && player.special_role !== 'maire'
-      ? SPECIAL_ROLE_LABELS[player.special_role]
-      : null;
-  const parts = specialLabel ? `${roleName}, ${specialLabel}` : roleName;
+  const roles = parseRoles(player.special_role).filter(r => r !== 'maire');
+  const specialLabels = roles.map(r => SPECIAL_ROLE_LABELS[r]).filter(Boolean);
+  const parts = specialLabels.length > 0 ? `${roleName}, ${specialLabels.join(', ')}` : roleName;
   return `Fantome (${parts})`;
 }
 
@@ -35,7 +44,7 @@ export default function PlayerCard({
   compact = false,
 }) {
   const isGhost = player.status === 'ghost';
-  const hasImmunity = player.special_role === 'immunite';
+  const hasImmunity = hasRole(player.special_role, 'immunite');
 
   function handleClick() {
     if (!disabled && onClick) {

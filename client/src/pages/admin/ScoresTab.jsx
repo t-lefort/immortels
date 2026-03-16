@@ -95,17 +95,18 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
       ? 'bg-red-900/50 text-red-300 border border-red-800/50'
       : 'bg-blue-900/50 text-blue-300 border border-blue-800/50';
     const roleLabel = role === 'wolf' ? 'Loup' : 'Villageois';
+    const roles = specialRole ? specialRole.split(',').map(r => r.trim()).filter(Boolean) : [];
 
     return (
       <>
         <span className={`px-1.5 py-0.5 rounded text-xs ${roleBadge}`}>
           {roleLabel}
         </span>
-        {specialRole && (
-          <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300 border border-purple-800/50">
-            {specialRole}
+        {roles.map(r => (
+          <span key={r} className="ml-1 px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300 border border-purple-800/50">
+            {r}
           </span>
-        )}
+        ))}
       </>
     );
   }

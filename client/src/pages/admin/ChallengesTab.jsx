@@ -103,8 +103,9 @@ export default function ChallengesTab({ players, refreshPlayers }) {
     );
   }
 
-  const alivePlayers = players.filter(p => p.status === 'alive');
-  const availablePlayers = alivePlayers.filter(p => !p.special_role);
+  const activePlayers = players.filter(p => p.status === 'alive' || p.status === 'ghost');
+  // All active players are available — players can now have multiple special roles
+  const availablePlayers = activePlayers;
 
   return (
     <div className="space-y-6">
@@ -190,17 +191,19 @@ export default function ChallengesTab({ players, refreshPlayers }) {
               Équipe gagnante ({selectedPlayers.length} joueurs) :
             </label>
             <div className="flex flex-wrap gap-1.5">
-              {alivePlayers.map(p => (
+              {activePlayers.map(p => (
                 <button
                   key={p.id}
                   onClick={() => togglePlayer(p.id)}
                   className={`px-2 py-1 rounded text-xs transition-colors ${
                     selectedPlayers.includes(p.id)
                       ? 'bg-villager text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      : p.status === 'ghost'
+                        ? 'bg-gray-800 text-ghost hover:bg-gray-700'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
-                  {p.name}
+                  {p.name}{p.status === 'ghost' ? ' 👻' : ''}
                 </button>
               ))}
             </div>

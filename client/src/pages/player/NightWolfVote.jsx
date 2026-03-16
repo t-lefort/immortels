@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
+import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
 
 /**
  * Wolf vote during night phase.
@@ -65,6 +66,9 @@ export default function NightWolfVote() {
           <span className="text-gray-600 text-sm ml-2">votes</span>
         </div>
       </div>
+
+      {/* Night vote info panel */}
+      <NightVoteInfoPanel />
 
       {/* Already voted state */}
       {alreadyVoted ? (

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
  * VoteRevealDisplay — Post-council vote reveal overlay for the dashboard.
  * Shows who voted for whom, grouped by target, with the eliminated player highlighted.
  * Displayed after the dramatic result reveal, dismissed by the admin.
+ * Compact multi-column layout to fit on one screen with ~30 players.
  */
 export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
   const [revealed, setRevealed] = useState(false);
@@ -37,9 +38,12 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
   const eliminatedId = eliminatedPlayer?.id;
   const totalVotes = councilVotes?.length || 0;
 
+  // Determine column count based on number of vote groups
+  const columnCount = groupedVotes.length > 8 ? 3 : groupedVotes.length > 4 ? 2 : 1;
+
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col items-center justify-center animate-fadeIn"
+      className="absolute inset-0 z-30 flex flex-col items-center justify-start animate-fadeIn"
       style={{
         background:
           'radial-gradient(ellipse at center, rgb(20, 15, 5) 0%, rgb(10, 8, 2) 50%, rgb(5, 5, 5) 100%)',
@@ -49,6 +53,7 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
       <div
         className="animate-slideUp"
         style={{
+          marginTop: '1.5vh',
           animationDelay: '0.1s',
           animationFillMode: 'both',
         }}
@@ -56,7 +61,7 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
         <h1
           className="font-bold uppercase tracking-[0.3em] text-center"
           style={{
-            fontSize: '2.2vw',
+            fontSize: '1.6vw',
             color: 'rgba(224, 160, 48, 0.9)',
             textShadow: '0 0 20px rgba(224, 160, 48, 0.3)',
           }}
@@ -73,28 +78,29 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
           height: '1px',
           background:
             'linear-gradient(90deg, transparent, rgba(224, 160, 48, 0.5), transparent)',
-          marginTop: '2vh',
-          marginBottom: '3vh',
+          marginTop: '1vh',
+          marginBottom: '1.5vh',
           animationDelay: '0.3s',
           animationFillMode: 'both',
         }}
       />
 
-      {/* Vote groups */}
+      {/* Vote groups — multi-column grid */}
       <div
         style={{
           opacity: revealed ? 1 : 0,
           transform: revealed ? 'translateY(0)' : 'translateY(20px)',
           transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-          maxWidth: '85vw',
-          width: '100%',
-          maxHeight: '65vh',
+          width: '92vw',
+          maxHeight: '82vh',
           overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '2.5vh',
-          paddingBottom: '2vh',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+          gap: '1vh 1.5vw',
+          paddingBottom: '1vh',
+          paddingLeft: '1vw',
+          paddingRight: '1vw',
+          alignContent: 'start',
         }}
       >
         {groupedVotes.map((group, groupIndex) => {
@@ -105,10 +111,8 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
             <div
               key={group.targetId}
               style={{
-                width: '70vw',
-                maxWidth: '900px',
-                padding: '1.5vh 2vw',
-                borderRadius: '0.6vw',
+                padding: '0.7vh 1vw',
+                borderRadius: '0.4vw',
                 background: isEliminated
                   ? 'rgba(139, 0, 0, 0.2)'
                   : 'rgba(255, 255, 255, 0.03)',
@@ -116,7 +120,7 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
                   ? '1px solid rgba(139, 0, 0, 0.5)'
                   : '1px solid rgba(255, 255, 255, 0.06)',
                 animation: 'slideUp 0.5s ease-out forwards',
-                animationDelay: `${0.4 + groupIndex * 0.15}s`,
+                animationDelay: `${0.4 + groupIndex * 0.1}s`,
                 animationFillMode: 'both',
                 opacity: 0,
               }}
@@ -127,14 +131,14 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  marginBottom: '1vh',
+                  marginBottom: '0.3vh',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1vw' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5vw' }}>
                   <span
                     className="font-bold"
                     style={{
-                      fontSize: '2vw',
+                      fontSize: '1.3vw',
                       color: isEliminated ? '#ff4444' : '#fff',
                       textShadow: isEliminated
                         ? '0 0 15px rgba(255, 68, 68, 0.4)'
@@ -147,10 +151,10 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
                     <span
                       className="uppercase font-bold tracking-wider"
                       style={{
-                        fontSize: '0.9vw',
+                        fontSize: '0.6vw',
                         color: '#ff4444',
-                        padding: '0.2vh 0.6vw',
-                        borderRadius: '0.3vw',
+                        padding: '0.1vh 0.4vw',
+                        borderRadius: '0.2vw',
                         background: 'rgba(139, 0, 0, 0.3)',
                         border: '1px solid rgba(139, 0, 0, 0.5)',
                       }}
@@ -162,16 +166,16 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
                 <span
                   className="font-bold"
                   style={{
-                    fontSize: '1.6vw',
+                    fontSize: '1.1vw',
                     color: isEliminated
                       ? 'rgba(255, 68, 68, 0.8)'
                       : 'rgba(224, 160, 48, 0.8)',
                   }}
                 >
-                  {group.voters.length} vote{group.voters.length > 1 ? 's' : ''}{' '}
+                  {group.voters.length}{' '}
                   <span
                     style={{
-                      fontSize: '1.1vw',
+                      fontSize: '0.8vw',
                       color: 'rgba(255, 255, 255, 0.3)',
                     }}
                   >
@@ -184,10 +188,10 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
               <div
                 style={{
                   width: '100%',
-                  height: '0.4vh',
+                  height: '0.3vh',
                   background: 'rgba(255, 255, 255, 0.05)',
                   borderRadius: '2px',
-                  marginBottom: '1vh',
+                  marginBottom: '0.4vh',
                   overflow: 'hidden',
                 }}
               >
@@ -204,28 +208,15 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
                 />
               </div>
 
-              {/* Voter names */}
+              {/* Voter names — inline comma-separated for compactness */}
               <div
                 style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '0.5vw',
+                  fontSize: '0.8vw',
+                  color: 'rgba(255, 255, 255, 0.45)',
+                  lineHeight: '1.4',
                 }}
               >
-                {group.voters.map((voterName, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      fontSize: '1.1vw',
-                      color: 'rgba(255, 255, 255, 0.5)',
-                      padding: '0.2vh 0.5vw',
-                      borderRadius: '0.2vw',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                    }}
-                  >
-                    {voterName}
-                  </span>
-                ))}
+                {group.voters.join(', ')}
               </div>
             </div>
           );
@@ -234,13 +225,13 @@ export default function VoteRevealDisplay({ councilVotes, eliminatedPlayer }) {
 
       {/* Bottom subtle indicator */}
       <div
-        className="absolute bottom-[2vh] text-center"
+        className="absolute bottom-[1.5vh] text-center"
         style={{
           opacity: revealed ? 0.4 : 0,
           transition: 'opacity 1s ease-out 1.5s',
         }}
       >
-        <span style={{ fontSize: '0.9vw', color: 'rgba(255, 255, 255, 0.4)' }}>
+        <span style={{ fontSize: '0.8vw', color: 'rgba(255, 255, 255, 0.4)' }}>
           En attente de l'admin...
         </span>
       </div>

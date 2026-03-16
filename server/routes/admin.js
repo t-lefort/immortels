@@ -3,7 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { adminAuth } from '../middleware/auth.js';
 import { getDb, getAllSettings, getSetting, setSetting, resetGame } from '../db.js';
 import logger from '../logger.js';
+import { hasSpecialRole, addSpecialRole, parseSpecialRoles } from '../role-helpers.js';
 import { recordScoreSnapshot, listScoreSnapshots } from '../score-snapshots.js';
+import { removeSpecialRole } from '../role-helpers.js';
 import {
   assignRoles,
   createPhase,
@@ -183,8 +185,14 @@ router.post('/game/start', (req, res) => {
   const io = req.app.get('io');
   if (io) {
     // Send game:started to each player individually with their role
+    // and ensure wolf sockets join the 'wolves' room (they may have
+    // connected before roles were assigned, so joinPlayerRooms didn't
+    // add them to the wolves room at connection time).
     const players = db.prepare('SELECT * FROM players').all();
     for (const player of players) {
+      if (player.role === 'wolf') {
+        updatePlayerRooms(io, player.id, undefined, 'wolf');
+      }
       emitToPlayer(io, player.id, 'game:started', {
         role: player.role,
       });
@@ -541,7 +549,7 @@ router.post('/phase/reveal', (req, res) => {
 
     // Check if hunter was eliminated — trigger hunter power
     for (const p of eliminated) {
-      if (p.special_role === 'chasseur') {
+      if (hasSpecialRole(p.special_role, 'chasseur')) {
         handleChasseur(io, p.id);
       }
     }
@@ -857,11 +865,26 @@ router.post('/special/skip', (req, res) => {
       setSetting('hunter_pending', '0');
       setSetting('hunter_player_id', null);
       break;
-    case 'mayor_succession':
+    case 'mayor_succession': {
       setSetting('mayor_succession_pending', '0');
+      // Clear maire special_role from old mayor in players table
+      const oldMayorIdStr = getSetting('mayor_id');
+      if (oldMayorIdStr) {
+        const skipDb = getDb();
+        const oldMayor = skipDb.prepare('SELECT special_role FROM players WHERE id = ?').get(Number(oldMayorIdStr));
+        if (oldMayor) {
+          const updatedRole = removeSpecialRole(oldMayor.special_role, 'maire');
+          skipDb.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(updatedRole, Number(oldMayorIdStr));
+        }
+      }
       // Mayor position stays vacant
       setSetting('mayor_id', null);
+      // Trigger admin player list refresh
+      if (io) {
+        emitToAdmin(io, 'lobby:update', {});
+      }
       break;
+    }
     default:
       return res.status(400).json({ error: `Pouvoir inconnu: ${power}` });
   }
@@ -932,13 +955,15 @@ router.post('/challenge/assign', (req, res) => {
     return res.status(404).json({ error: 'Joueur introuvable' });
   }
 
-  // Check player doesn't already have a special role
-  if (player.special_role) {
-    return res.status(400).json({ error: `${player.name} a déjà le rôle spécial "${player.special_role}"` });
+  // Check player doesn't already have THIS specific role
+  if (hasSpecialRole(player.special_role, challenge.special_role_awarded)) {
+    return res.status(400).json({ error: `${player.name} a déjà le rôle spécial "${challenge.special_role_awarded}"` });
   }
 
+  const newSpecialRole = addSpecialRole(player.special_role, challenge.special_role_awarded);
+
   db.transaction(() => {
-    db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(challenge.special_role_awarded, Number(playerId));
+    db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(newSpecialRole, Number(playerId));
     db.prepare('UPDATE challenges SET awarded_to_player_id = ? WHERE id = ?').run(Number(playerId), Number(challengeId));
 
     // When assigning maire role, also set the mayor_id game setting
@@ -947,10 +972,13 @@ router.post('/challenge/assign', (req, res) => {
     }
   })();
 
+  // Re-read the player to get the full composite special_role
+  const updatedPlayer = db.prepare('SELECT special_role FROM players WHERE id = ?').get(Number(playerId));
+
   const io = req.app.get('io');
   if (io) {
     emitToPlayer(io, playerId, 'player:role_assigned', {
-      specialRole: challenge.special_role_awarded,
+      specialRole: updatedPlayer.special_role,
     });
   }
 
@@ -1044,9 +1072,16 @@ router.put('/player/:id', (req, res) => {
   }
   if (updates.special_role !== undefined && updates.special_role !== null) {
     const validSpecialRoles = ['maire', 'sorciere', 'protecteur', 'voyante', 'chasseur', 'immunite'];
-    if (!validSpecialRoles.includes(updates.special_role)) {
-      return res.status(400).json({ error: `Rôle spécial invalide. Valeurs acceptées: ${validSpecialRoles.join(', ')}, ou null` });
+    // Support comma-separated multiple roles
+    const rolesArray = parseSpecialRoles(updates.special_role);
+    for (const r of rolesArray) {
+      if (!validSpecialRoles.includes(r)) {
+        return res.status(400).json({ error: `Rôle spécial invalide: "${r}". Valeurs acceptées: ${validSpecialRoles.join(', ')}, ou null` });
+      }
     }
+    // Normalize: deduplicate and rejoin
+    const uniqueRoles = [...new Set(rolesArray)];
+    updates.special_role = uniqueRoles.length > 0 ? uniqueRoles.join(',') : null;
   }
   if (updates.score !== undefined && typeof updates.score !== 'number') {
     return res.status(400).json({ error: 'Le score doit être un nombre' });
@@ -1073,6 +1108,22 @@ router.put('/player/:id', (req, res) => {
   const values = Object.values(updates);
 
   db.prepare(`UPDATE players SET ${setClauses} WHERE id = ?`).run(...values, id);
+
+  // Sync mayor_id game setting when special_role changes involving 'maire'
+  if (updates.special_role !== undefined) {
+    const hadMaire = hasSpecialRole(player.special_role, 'maire');
+    const hasMaire = hasSpecialRole(updates.special_role, 'maire');
+    if (!hadMaire && hasMaire) {
+      // Maire added to this player
+      setSetting('mayor_id', String(id));
+    } else if (hadMaire && !hasMaire) {
+      // Maire removed from this player — clear mayor_id if it pointed to this player
+      const currentMayor = getSetting('mayor_id');
+      if (currentMayor && Number(currentMayor) === id) {
+        setSetting('mayor_id', null);
+      }
+    }
+  }
 
   const updated = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
 
@@ -1141,9 +1192,11 @@ router.post('/phase/undo', (req, res) => {
     try {
       const immunityPlayerIds = JSON.parse(immunityUsedJson);
       if (Array.isArray(immunityPlayerIds) && immunityPlayerIds.length > 0) {
-        const restoreImmunity = db.prepare("UPDATE players SET special_role = 'immunite' WHERE id = ?");
+        // Re-add 'immunite' to each player's special_role (preserving other roles)
         for (const pid of immunityPlayerIds) {
-          restoreImmunity.run(Number(pid));
+          const p = db.prepare('SELECT special_role FROM players WHERE id = ?').get(Number(pid));
+          const newRole = addSpecialRole(p ? p.special_role : null, 'immunite');
+          db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(newRole, Number(pid));
         }
       }
     } catch (err) {

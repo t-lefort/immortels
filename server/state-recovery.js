@@ -1,4 +1,5 @@
 import { getDb, getSetting, getAllSettings } from './db.js';
+import { sqlHasRole } from './role-helpers.js';
 
 /**
  * State Recovery Module
@@ -85,9 +86,10 @@ export function recoverState() {
   const pendingPowers = [];
 
   if (settings.protecteur_pending === '1') {
+    const srProt = sqlHasRole('protecteur');
     const protector = db.prepare(
-      "SELECT id, name FROM players WHERE special_role = 'protecteur' AND status = 'alive'"
-    ).get();
+      `SELECT id, name FROM players WHERE ${srProt.clause} AND status = 'alive'`
+    ).get(...srProt.params);
     pendingPowers.push({
       power: 'protecteur',
       player: protector || null,
@@ -98,9 +100,10 @@ export function recoverState() {
   }
 
   if (settings.sorciere_pending === '1') {
+    const srWitch = sqlHasRole('sorciere');
     const witch = db.prepare(
-      "SELECT id, name FROM players WHERE special_role = 'sorciere' AND status = 'alive'"
-    ).get();
+      `SELECT id, name FROM players WHERE ${srWitch.clause} AND status = 'alive'`
+    ).get(...srWitch.params);
     const victimId = settings.sorciere_victim_id
       ? Number(settings.sorciere_victim_id)
       : null;
@@ -115,9 +118,10 @@ export function recoverState() {
   }
 
   if (settings.voyante_pending === '1') {
+    const srSeer = sqlHasRole('voyante');
     const seer = db.prepare(
-      "SELECT id, name FROM players WHERE special_role = 'voyante' AND status = 'alive'"
-    ).get();
+      `SELECT id, name FROM players WHERE ${srSeer.clause} AND status = 'alive'`
+    ).get(...srSeer.params);
     pendingPowers.push({
       power: 'voyante',
       player: seer || null,

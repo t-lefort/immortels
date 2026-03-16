@@ -268,8 +268,9 @@ export default function GameDisplay({ players, currentPhase, children }) {
                         {isWolf ? 'LOUP' : 'VILLAGEOIS'}
                       </span>
                     )}
-                    {player.special_role && player.special_role !== 'maire' && (
+                    {player.special_role && player.special_role.split(',').filter(r => r.trim() && r.trim() !== 'maire').map(r => (
                       <span
+                        key={r.trim()}
                         className="font-bold uppercase"
                         style={{
                           fontSize: '0.85vw',
@@ -280,9 +281,9 @@ export default function GameDisplay({ players, currentPhase, children }) {
                           border: '1px solid rgba(168, 85, 247, 0.2)',
                         }}
                       >
-                        {player.special_role}
+                        {r.trim()}
                       </span>
-                    )}
+                    ))}
                   </div>
                 );
               })}

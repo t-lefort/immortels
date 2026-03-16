@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb, getSetting } from '../db.js';
 import { requirePlayer } from '../middleware/session.js';
 import logger from '../logger.js';
+import { hasSpecialRole } from '../role-helpers.js';
 import {
   submitVote,
   submitGhostIdentifications,
@@ -457,7 +458,7 @@ router.post('/special-respond', requirePlayer, (req, res) => {
           return res.status(400).json({ error: 'targetId requis.' });
         }
         // Verify the responding player is the protector
-        if (player.special_role !== 'protecteur') {
+        if (!hasSpecialRole(player.special_role, 'protecteur')) {
           return res.status(403).json({ error: 'Vous n\'êtes pas le protecteur.' });
         }
         // Validate target exists and is alive
@@ -473,7 +474,7 @@ router.post('/special-respond', requirePlayer, (req, res) => {
       }
       case 'sorciere': {
         // Verify the responding player is the witch
-        if (player.special_role !== 'sorciere') {
+        if (!hasSpecialRole(player.special_role, 'sorciere')) {
           return res.status(403).json({ error: 'Vous n\'êtes pas la sorcière.' });
         }
         const victimIdStr = getSetting('sorciere_victim_id');
@@ -486,7 +487,7 @@ router.post('/special-respond', requirePlayer, (req, res) => {
           return res.status(400).json({ error: 'targetId requis.' });
         }
         // Verify the responding player is the seer
-        if (player.special_role !== 'voyante') {
+        if (!hasSpecialRole(player.special_role, 'voyante')) {
           return res.status(403).json({ error: 'Vous n\'êtes pas la voyante.' });
         }
         // Validate target exists
@@ -502,7 +503,7 @@ router.post('/special-respond', requirePlayer, (req, res) => {
           return res.status(400).json({ error: 'targetId requis.' });
         }
         // Verify the responding player is the hunter
-        if (player.special_role !== 'chasseur') {
+        if (!hasSpecialRole(player.special_role, 'chasseur')) {
           return res.status(403).json({ error: 'Vous n\'êtes pas le chasseur.' });
         }
         // Validate target exists and is alive

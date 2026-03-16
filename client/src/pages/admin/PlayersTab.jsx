@@ -1,6 +1,21 @@
 import { useState } from 'react';
 import * as api from '../../services/adminApi.js';
 
+const ALL_SPECIAL_ROLES = [
+  { value: 'maire', label: 'Maire' },
+  { value: 'sorciere', label: 'Sorciere' },
+  { value: 'protecteur', label: 'Protecteur' },
+  { value: 'voyante', label: 'Voyante' },
+  { value: 'chasseur', label: 'Chasseur' },
+  { value: 'immunite', label: 'Immunite' },
+];
+
+/** Parse comma-separated special_role string into an array */
+function parseRoles(str) {
+  if (!str) return [];
+  return str.split(',').map(r => r.trim()).filter(Boolean);
+}
+
 export default function PlayersTab({ players, refreshPlayers }) {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
@@ -12,7 +27,7 @@ export default function PlayersTab({ players, refreshPlayers }) {
     setEditData({
       name: player.name,
       role: player.role || '',
-      special_role: player.special_role || '',
+      special_roles: parseRoles(player.special_role),
       status: player.status,
       score: player.score,
     });
@@ -23,6 +38,17 @@ export default function PlayersTab({ players, refreshPlayers }) {
     setEditData({});
   }
 
+  function toggleSpecialRole(role) {
+    setEditData(d => {
+      const roles = d.special_roles || [];
+      if (roles.includes(role)) {
+        return { ...d, special_roles: roles.filter(r => r !== role) };
+      } else {
+        return { ...d, special_roles: [...roles, role] };
+      }
+    });
+  }
+
   async function saveEdit() {
     setLoading(true);
     try {
@@ -31,14 +57,17 @@ export default function PlayersTab({ players, refreshPlayers }) {
 
       if (editData.name !== original.name) updates.name = editData.name;
       if (editData.role !== (original.role || '')) updates.role = editData.role || null;
-      if (editData.special_role !== (original.special_role || '')) updates.special_role = editData.special_role || null;
+
+      const newSpecialRole = editData.special_roles.length > 0 ? editData.special_roles.join(',') : null;
+      if (newSpecialRole !== (original.special_role || null)) updates.special_role = newSpecialRole;
+
       if (editData.status !== original.status) updates.status = editData.status;
       if (Number(editData.score) !== original.score) updates.score = Number(editData.score);
 
       if (Object.keys(updates).length > 0) {
         await api.updatePlayer(editingId, updates);
         refreshPlayers();
-        setMessage({ type: 'success', text: `${editData.name} mis à jour` });
+        setMessage({ type: 'success', text: `${editData.name} mis a jour` });
       }
       cancelEdit();
     } catch (err) {
@@ -65,11 +94,11 @@ export default function PlayersTab({ players, refreshPlayers }) {
             <tr className="border-b border-gray-800 text-gray-400 text-left">
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Nom</th>
-              <th className="px-3 py-2">Rôle</th>
-              <th className="px-3 py-2">Spécial</th>
+              <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Special</th>
               <th className="px-3 py-2">Statut</th>
               <th className="px-3 py-2">Score</th>
-              <th className="px-3 py-2">Éliminé par</th>
+              <th className="px-3 py-2">Elimine par</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -94,25 +123,31 @@ export default function PlayersTab({ players, refreshPlayers }) {
                         onChange={(e) => setEditData(d => ({ ...d, role: e.target.value }))}
                         className="px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
                       >
-                        <option value="">—</option>
+                        <option value="">--</option>
                         <option value="wolf">Loup</option>
                         <option value="villager">Villageois</option>
                       </select>
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        value={editData.special_role}
-                        onChange={(e) => setEditData(d => ({ ...d, special_role: e.target.value }))}
-                        className="px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                      >
-                        <option value="">—</option>
-                        <option value="maire">Maire</option>
-                        <option value="sorciere">Sorcière</option>
-                        <option value="protecteur">Protecteur</option>
-                        <option value="voyante">Voyante</option>
-                        <option value="chasseur">Chasseur</option>
-                        <option value="immunite">Immunité</option>
-                      </select>
+                      <div className="flex flex-wrap gap-1">
+                        {ALL_SPECIAL_ROLES.map(sr => {
+                          const active = (editData.special_roles || []).includes(sr.value);
+                          return (
+                            <button
+                              key={sr.value}
+                              type="button"
+                              onClick={() => toggleSpecialRole(sr.value)}
+                              className={`px-1.5 py-0.5 rounded text-xs border transition-colors ${
+                                active
+                                  ? 'bg-purple-800 text-purple-200 border-purple-600'
+                                  : 'bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-500'
+                              }`}
+                            >
+                              {sr.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <select
@@ -121,7 +156,7 @@ export default function PlayersTab({ players, refreshPlayers }) {
                         className="px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
                       >
                         <option value="alive">Vivant</option>
-                        <option value="ghost">Fantôme</option>
+                        <option value="ghost">Fantome</option>
                       </select>
                     </td>
                     <td className="px-3 py-2">
@@ -132,7 +167,7 @@ export default function PlayersTab({ players, refreshPlayers }) {
                         className="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
                       />
                     </td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{p.eliminated_by || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{p.eliminated_by || '--'}</td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
                         <button
@@ -163,27 +198,31 @@ export default function PlayersTab({ players, refreshPlayers }) {
                           {p.role === 'wolf' ? 'Loup' : 'Villageois'}
                         </span>
                       ) : (
-                        <span className="text-gray-600">—</span>
+                        <span className="text-gray-600">--</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {p.special_role ? (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300">
-                          {p.special_role}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {parseRoles(p.special_role).map(r => (
+                            <span key={r} className="px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300">
+                              {r}
+                            </span>
+                          ))}
+                        </div>
                       ) : (
-                        <span className="text-gray-600">—</span>
+                        <span className="text-gray-600">--</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       <span className={`px-1.5 py-0.5 rounded text-xs ${
                         p.status === 'alive' ? 'bg-green-900/50 text-green-300' : 'bg-gray-700 text-gray-400'
                       }`}>
-                        {p.status === 'alive' ? 'Vivant' : 'Fantôme'}
+                        {p.status === 'alive' ? 'Vivant' : 'Fantome'}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-white">{p.score}</td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{p.eliminated_by || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{p.eliminated_by || '--'}</td>
                     <td className="px-3 py-2">
                       <button
                         onClick={() => startEdit(p)}

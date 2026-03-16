@@ -1,6 +1,7 @@
 import { getDb, getSetting, setSetting } from './db.js';
 import logger from './logger.js';
 import { recordScoreSnapshot } from './score-snapshots.js';
+import { sqlHasRole } from './role-helpers.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -391,7 +392,8 @@ export function resolveVillageCouncil(phaseId) {
   ).all(phaseId);
 
   // Tally with mayor double vote — look up directly from players table
-  const mayor = db.prepare("SELECT id FROM players WHERE special_role = 'maire' AND status = 'alive'").get();
+  const srM = sqlHasRole('maire');
+  const mayor = db.prepare(`SELECT id FROM players WHERE ${srM.clause} AND status = 'alive'`).get(...srM.params);
   const mayorId = mayor ? mayor.id : null;
 
   const counts = {};
@@ -666,7 +668,7 @@ function computeCouncilScores(db, phaseId, changes, addScore) {
 
 /**
  * Compute and apply challenge scores.
- * +1 for each alive player in the winning team.
+ * +1 for each player in the winning team (alive or ghost).
  */
 export function computeChallengeScores(challengeId) {
   const db = getDb();

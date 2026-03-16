@@ -11,6 +11,12 @@ const SPECIAL_ROLE_LABELS = {
   immunite: 'Immunite',
 };
 
+/** Parse comma-separated special_role into array */
+function parseRoles(str) {
+  if (!str) return [];
+  return str.split(',').map(r => r.trim()).filter(Boolean);
+}
+
 /**
  * Format a ghost player's former role for display.
  * e.g. "Fantome (Villageois)" or "Fantome (Loup, Voyante)"
@@ -18,11 +24,9 @@ const SPECIAL_ROLE_LABELS = {
 function formatGhostLabel(player) {
   if (!player.role) return 'Fantome';
   const roleName = player.role === 'wolf' ? 'Loup' : 'Villageois';
-  const specialLabel =
-    player.special_role && player.special_role !== 'maire'
-      ? SPECIAL_ROLE_LABELS[player.special_role]
-      : null;
-  const parts = specialLabel ? `${roleName}, ${specialLabel}` : roleName;
+  const roles = parseRoles(player.special_role).filter(r => r !== 'maire');
+  const specialLabels = roles.map(r => SPECIAL_ROLE_LABELS[r]).filter(Boolean);
+  const parts = specialLabels.length > 0 ? `${roleName}, ${specialLabels.join(', ')}` : roleName;
   return `Fantome (${parts})`;
 }
 

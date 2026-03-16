@@ -35,7 +35,7 @@ export default function GameEndScreen() {
       </div>
       {player?.special_role && (
         <p className="text-yellow-400 text-sm mt-3">
-          Rôle spécial : {player.special_role}
+          {player.special_role.includes(',') ? 'Roles speciaux' : 'Role special'} : {player.special_role.split(',').join(', ')}
         </p>
       )}
       <div className="mt-8 bg-gray-800/50 border border-gray-700 rounded-xl px-8 py-5 text-center">

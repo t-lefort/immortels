@@ -14,6 +14,7 @@ import {
 } from './socket-rooms.js';
 import logger from './logger.js';
 import { recordScoreSnapshot } from './score-snapshots.js';
+import { hasSpecialRole, addSpecialRole, removeSpecialRole, sqlHasRole } from './role-helpers.js';
 
 // ─── Maire (Mayor) ──────────────────────────────────────────────────────────
 
@@ -79,6 +80,19 @@ export function processMayorSuccession(io, newMayorId) {
     throw new Error(`${newMayor.name} est un fantôme et ne peut pas devenir maire. Choisissez un joueur vivant.`);
   }
 
+  // Update players table: remove maire from old mayor, assign to new mayor
+  const oldMayorIdStr = getSetting('mayor_id');
+  if (oldMayorIdStr) {
+    const oldMayor = db.prepare('SELECT special_role FROM players WHERE id = ?').get(Number(oldMayorIdStr));
+    if (oldMayor) {
+      const updatedOldRole = removeSpecialRole(oldMayor.special_role, 'maire');
+      db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(updatedOldRole, Number(oldMayorIdStr));
+    }
+  }
+  const currentNewMayor = db.prepare('SELECT special_role FROM players WHERE id = ?').get(Number(newMayorId));
+  const updatedNewRole = addSpecialRole(currentNewMayor?.special_role, 'maire');
+  db.prepare('UPDATE players SET special_role = ? WHERE id = ?').run(updatedNewRole, Number(newMayorId));
+
   setSetting('mayor_id', String(newMayorId));
   setSetting('mayor_succession_pending', '0');
   logger.special('Mayor succession completed', { newMayorId: Number(newMayorId), newMayorName: newMayor.name });
@@ -89,6 +103,9 @@ export function processMayorSuccession(io, newMayorId) {
     newMayorId: Number(newMayorId),
     newMayorName: newMayor.name,
   });
+
+  // Trigger admin player list refresh so the new maire role is visible
+  emitToAdmin(io, 'lobby:update', {});
 
   // Notify the new mayor
   emitToPlayer(io, Number(newMayorId), 'special:result', {
@@ -125,9 +142,10 @@ export function handleSorciere(io, phaseId, victimId) {
   }
 
   // Find the witch player
+  const sr = sqlHasRole('sorciere');
   const witch = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'sorciere' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${sr.clause} AND status = 'alive'`
+  ).get(...sr.params);
 
   if (!witch) {
     return { skipped: true, reason: 'no_witch' };
@@ -178,9 +196,10 @@ export function processSorciereResponse(io, resurrect, victimId) {
     updatePlayerRooms(io, Number(victimId), 'alive');
 
     // Get witch player for notification
+    const sr2 = sqlHasRole('sorciere');
     const witch = db.prepare(
-      "SELECT id FROM players WHERE special_role = 'sorciere'"
-    ).get();
+      `SELECT id FROM players WHERE ${sr2.clause}`
+    ).get(...sr2.params);
 
     if (witch) {
       emitToPlayer(io, witch.id, 'special:result', {
@@ -205,9 +224,10 @@ export function processSorciereResponse(io, resurrect, victimId) {
     // "Single use (check game_settings.witch_used)" — means one use total.
     // The witch can decline and keep her power for later.
 
+    const sr3 = sqlHasRole('sorciere');
     const witch = db.prepare(
-      "SELECT id FROM players WHERE special_role = 'sorciere'"
-    ).get();
+      `SELECT id FROM players WHERE ${sr3.clause}`
+    ).get(...sr3.params);
 
     if (witch) {
       emitToPlayer(io, witch.id, 'special:result', {
@@ -235,9 +255,10 @@ export function handleProtecteur(io, phaseId) {
   const db = getDb();
 
   // Find the protector
+  const srProt = sqlHasRole('protecteur');
   const protector = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'protecteur' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srProt.clause} AND status = 'alive'`
+  ).get(...srProt.params);
 
   if (!protector) {
     return { skipped: true, reason: 'no_protector' };
@@ -284,9 +305,10 @@ export function processProtecteurResponse(io, targetId) {
   const db = getDb();
 
   // Validate target
+  const srProt2 = sqlHasRole('protecteur');
   const protector = db.prepare(
-    "SELECT id FROM players WHERE special_role = 'protecteur'"
-  ).get();
+    `SELECT id FROM players WHERE ${srProt2.clause}`
+  ).get(...srProt2.params);
 
   if (protector && Number(targetId) === protector.id) {
     throw new Error('Le protecteur ne peut pas se protéger lui-même');
@@ -343,9 +365,10 @@ export function handleVoyante(io, phaseId) {
   }
 
   // Find the seer
+  const srSeer = sqlHasRole('voyante');
   const seer = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'voyante' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srSeer.clause} AND status = 'alive'`
+  ).get(...srSeer.params);
 
   if (!seer) {
     return { skipped: true, reason: 'no_seer' };
@@ -394,9 +417,10 @@ export function processVoyanteResponse(io, targetId) {
   }
   setSetting('voyante_pending', '0');
 
+  const srSeer2 = sqlHasRole('voyante');
   const seer = db.prepare(
-    "SELECT id FROM players WHERE special_role = 'voyante'"
-  ).get();
+    `SELECT id FROM players WHERE ${srSeer2.clause}`
+  ).get(...srSeer2.params);
 
   const result = {
     power: 'voyante',
@@ -551,7 +575,7 @@ export function processChasseurResponse(io, targetId, phaseId) {
 
   // Chain reaction: if the killed target is also a hunter, trigger their power
   // with recursion protection (max 5 chains)
-  if (target.special_role === 'chasseur') {
+  if (hasSpecialRole(target.special_role, 'chasseur')) {
     hunterChainDepth++;
     if (hunterChainDepth > MAX_HUNTER_CHAIN_DEPTH) {
       logger.special('Hunter chain depth limit reached', { depth: MAX_HUNTER_CHAIN_DEPTH });
@@ -592,12 +616,13 @@ export function handleImmunite(phaseId, playerId) {
   const db = getDb();
 
   const player = db.prepare('SELECT id, name, special_role FROM players WHERE id = ?').get(Number(playerId));
-  if (!player || player.special_role !== 'immunite') {
+  if (!player || !hasSpecialRole(player.special_role, 'immunite')) {
     return { applied: false };
   }
 
-  // Remove immunity after use
-  db.prepare("UPDATE players SET special_role = NULL WHERE id = ?").run(Number(playerId));
+  // Remove immunity after use (keep other special roles)
+  const newRoles = removeSpecialRole(player.special_role, 'immunite');
+  db.prepare("UPDATE players SET special_role = ? WHERE id = ?").run(newRoles, Number(playerId));
 
   logger.special('Immunity used', { playerId: Number(playerId), playerName: player.name });
   return { applied: true, playerName: player.name };
@@ -612,30 +637,35 @@ export function handleImmunite(phaseId, playerId) {
 export function getSpecialRolesStatus() {
   const db = getDb();
 
+  const srP = sqlHasRole('protecteur');
   const protector = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'protecteur' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srP.clause} AND status = 'alive'`
+  ).get(...srP.params);
 
+  const srW = sqlHasRole('sorciere');
   const witch = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'sorciere' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srW.clause} AND status = 'alive'`
+  ).get(...srW.params);
 
+  const srS = sqlHasRole('voyante');
   const seer = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'voyante' AND status = 'alive'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srS.clause} AND status = 'alive'`
+  ).get(...srS.params);
 
+  const srH = sqlHasRole('chasseur');
   const hunter = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'chasseur'"
-  ).get();
+    `SELECT id, name FROM players WHERE ${srH.clause}`
+  ).get(...srH.params);
 
   const mayorIdStr = getSetting('mayor_id');
   const mayor = mayorIdStr
     ? db.prepare('SELECT id, name, status FROM players WHERE id = ?').get(Number(mayorIdStr))
     : null;
 
+  const srI = sqlHasRole('immunite');
   const immunePlayers = db.prepare(
-    "SELECT id, name FROM players WHERE special_role = 'immunite' AND status = 'alive'"
-  ).all();
+    `SELECT id, name FROM players WHERE ${srI.clause} AND status = 'alive'`
+  ).all(...srI.params);
 
   return {
     protecteur: {

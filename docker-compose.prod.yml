@@ -1,11 +1,11 @@
 version: '3.8'
 services:
   app:
-    build: .
+    image: ghcr.io/t-lefort/immortels:latest
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/data
+      - immortels-data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -17,3 +17,5 @@ services:
       retries: 3
       start_period: 10s
 
+volumes:
+  immortels-data:

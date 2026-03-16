@@ -307,6 +307,8 @@ export function PlayerProvider({ children }) {
         if (data.hasVoted !== undefined) setHasVoted(data.hasVoted || {});
         if (data.voteCount !== undefined) setVoteCount(data.voteCount);
         if (data.totalExpected !== undefined) setTotalExpected(data.totalExpected);
+        // Restore wolf pack list from state sync (sent to wolf players)
+        if (data.wolves) setWolves(data.wolves);
         // Clear any previous errors on successful sync
         setError(null);
       }),
