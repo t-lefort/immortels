@@ -1,12 +1,39 @@
+import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
+
+// Delay before showing result on player phones (seconds).
+// Lets the dashboard dramatic animation play out first so everyone watches the big screen.
+const REVEAL_DELAY_SECONDS = 10;
 
 /**
  * Phase result announcement screen.
  * Shows eliminated player name + role reveal.
- * Displayed when a phase:result event is received and cleared when next phase starts.
+ * A delay ensures players watch the dashboard screen first before seeing results on their phone.
  */
 export default function PhaseResultScreen() {
   const { phaseResult, clearPhaseResult } = usePlayer();
+  const [revealed, setRevealed] = useState(false);
+  const timerRef = useRef(null);
+  const resultIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!phaseResult) {
+      setRevealed(false);
+      resultIdRef.current = null;
+      return;
+    }
+
+    // New result arrived — start delay
+    const id = phaseResult.phase?.id || Date.now();
+    if (resultIdRef.current !== id) {
+      resultIdRef.current = id;
+      setRevealed(false);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setRevealed(true), REVEAL_DELAY_SECONDS * 1000);
+    }
+
+    return () => clearTimeout(timerRef.current);
+  }, [phaseResult]);
 
   if (!phaseResult) return null;
 
@@ -14,8 +41,23 @@ export default function PhaseResultScreen() {
   const phaseLabel = phase?.type === 'night' ? 'la nuit' : 'le conseil du village';
   const hasEliminated = eliminated && eliminated.length > 0;
 
+  // Waiting screen — players should look at the dashboard
+  if (!revealed) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <p className="text-gray-500 text-sm uppercase tracking-widest mb-6 animate-pulse">
+          Résultat de {phaseLabel}
+        </p>
+        <h2 className="text-2xl font-bold text-white mb-4 animate-pulse">
+          Regardez l'écran...
+        </h2>
+        <p className="text-gray-600 text-sm">Le destin a parlé</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 animate-fadeIn">
       {/* Phase type label */}
       <p className="text-gray-500 text-sm uppercase tracking-widest mb-6">
         Résultat de {phaseLabel}
