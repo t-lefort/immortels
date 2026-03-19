@@ -137,7 +137,7 @@ function runMigrations() {
 function initDefaultSettings() {
   const defaults = {
     game_status: 'setup',                // 'setup' | 'in_progress' | 'finished'
-    admin_password: 'REDACTED_PASSWORD',
+    admin_password: process.env.ADMIN_PASSWORD || 'changeme',
     current_phase_id: null,
     num_wolves: '8',
     moonless_night: '0',                 // '0' = seer active, '1' = disabled

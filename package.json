@@ -1,7 +1,7 @@
 {
   "name": "les-immortels",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "Application web temps réel pour un jeu de Loup-Garou",
   "scripts": {
