@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb, getSetting } from '../db.js';
 import { computeVoteCounts } from '../socket-rooms.js';
+import { getScoreboard } from '../game-engine.js';
 
 const router = Router();
 
@@ -59,6 +60,19 @@ router.get('/phase/:id', (req, res) => {
   `).all(phaseId);
 
   res.json({ phase, victims });
+});
+
+/**
+ * GET /api/game/scoreboard
+ * Returns the final scoreboard once the game is finished.
+ */
+router.get('/scoreboard', (_req, res) => {
+  const gameStatus = getSetting('game_status');
+  if (gameStatus !== 'finished') {
+    return res.status(403).json({ error: 'Scores non disponibles avant la fin de la partie.' });
+  }
+  const winner = getSetting('game_winner') || null;
+  res.json({ scoreboard: getScoreboard(), winner });
 });
 
 /**

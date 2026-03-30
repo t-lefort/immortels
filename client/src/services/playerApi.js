@@ -51,6 +51,10 @@ export function getPhase(phaseId) {
   return request(`${GAME_BASE}/phase/${phaseId}`);
 }
 
+export function getScoreboard() {
+  return request(`${GAME_BASE}/scoreboard`);
+}
+
 // ─── Voting ──────────────────────────────────────────────────────────────────
 
 export function submitVote(targetId) {

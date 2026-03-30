@@ -5,9 +5,13 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
  * Shows that the game is finished and who won.
  */
 export default function GameEndScreen() {
-  const { player, winner } = usePlayer();
+  const { player, winner, scoreboard } = usePlayer();
 
   const wolvesWin = winner === 'wolves';
+
+  const myEntry = scoreboard?.find((p) => p.id === player?.id);
+  const myScore = myEntry?.score ?? player?.score ?? 0;
+  const myRank = myEntry ? scoreboard.indexOf(myEntry) + 1 : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
@@ -40,7 +44,12 @@ export default function GameEndScreen() {
       )}
       <div className="mt-8 bg-gray-800/50 border border-gray-700 rounded-xl px-8 py-5 text-center">
         <p className="text-gray-500 text-sm mb-1">Votre score</p>
-        <p className="text-3xl font-bold text-white">{player?.score || 0}</p>
+        <p className="text-3xl font-bold text-white">{myScore}</p>
+        {myRank && (
+          <p className="text-gray-400 text-sm mt-2">
+            {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `${myRank}e`} sur {scoreboard.length}
+          </p>
+        )}
       </div>
     </div>
   );

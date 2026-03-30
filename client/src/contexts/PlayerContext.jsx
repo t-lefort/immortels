@@ -37,6 +37,7 @@ export function PlayerProvider({ children }) {
   const [phaseResult, setPhaseResult] = useState(null);
   const [roleRevealed, setRoleRevealed] = useState(null);
   const [winner, setWinner] = useState(null);
+  const [scoreboard, setScoreboard] = useState(null);
 
   // Track session token for socket reconnection
   const sessionTokenRef = useRef(null);
@@ -240,6 +241,19 @@ export function PlayerProvider({ children }) {
             // ignore
           }
         }
+
+        // Fetch scoreboard if game already finished (page reload after game:end)
+        if (me.gameStatus === 'finished') {
+          try {
+            const sbData = await playerApi.getScoreboard();
+            if (!ignore) {
+              setScoreboard(sbData.scoreboard);
+              if (sbData.winner) setWinner(sbData.winner);
+            }
+          } catch {
+            // ignore
+          }
+        }
       } catch (err) {
         if (ignore) return;
         // No valid session — player needs to login
@@ -325,6 +339,7 @@ export function PlayerProvider({ children }) {
       on('game:end', (data) => {
         setGameStatus('finished');
         if (data && data.winner) setWinner(data.winner);
+        if (data && data.scoreboard) setScoreboard(data.scoreboard);
       }),
 
       on('lobby:update', (data) => {
@@ -478,6 +493,7 @@ export function PlayerProvider({ children }) {
     phaseResult,
     roleRevealed,
     winner,
+    scoreboard,
 
     // Actions
     login,
