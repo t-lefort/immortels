@@ -199,6 +199,14 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
     }
   }
 
+  async function handleAdvanceSpeaker(direction) {
+    try {
+      await api.advanceSpeaker(direction);
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  }
+
   async function handleRefreshVotes() {
     if (!currentPhase) return;
     loadVoteDetails(currentPhase.id);
@@ -348,7 +356,28 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
 
               {speechOrder && (
                 <div className="bg-gray-800 rounded-lg p-3">
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">Ordre de parole :</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-400">Ordre de parole :</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAdvanceSpeaker('prev')}
+                        className="px-3 py-1.5 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
+                        title="Orateur précédent sur le dashboard"
+                      >
+                        &larr; Précédent
+                      </button>
+                      <button
+                        onClick={() => handleAdvanceSpeaker('next')}
+                        className="px-3 py-1.5 bg-yellow-800 text-white rounded-lg hover:bg-yellow-700 text-sm font-medium"
+                        title="Orateur suivant sur le dashboard"
+                      >
+                        Suivant &rarr;
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Fait avancer l'orateur surligné sur le dashboard.
+                  </p>
                   <ol className="list-decimal list-inside text-sm space-y-1">
                     {speechOrder.map((p, i) => (
                       <li key={p.id} className="text-gray-200">{p.name}</li>

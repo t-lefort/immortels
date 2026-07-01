@@ -384,3 +384,12 @@ html {
   font-size: inherit;
 }
 
+/* Hide scrollbar while keeping element scrollable (projected dashboard) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+

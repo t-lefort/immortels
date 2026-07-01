@@ -21,6 +21,10 @@ export function useDashboardSocket() {
   // Phase-specific state
   const [voteProgress, setVoteProgress] = useState({ count: 0, total: 0 });
   const [speechOrder, setSpeechOrder] = useState(null);
+  // Admin-driven "next/prev speaker" command. seq increments on every command
+  // so CouncilDisplay can apply each one exactly once (direction-based, since the
+  // dashboard owns the current speaker index).
+  const [speechCommand, setSpeechCommand] = useState(null);
   const [timer, setTimer] = useState(null);
 
   // Result / overlay state
@@ -215,6 +219,13 @@ export function useDashboardSocket() {
       if (data.order) setSpeechOrder(data.order);
     });
 
+    // Manual speaker advance (admin presses next/prev). Bump a monotonic seq
+    // so the display applies the command once even if React re-renders.
+    socket.on('dashboard:speech_advance', (data) => {
+      const direction = data?.direction === 'prev' ? 'prev' : 'next';
+      setSpeechCommand((prev) => ({ direction, seq: (prev?.seq || 0) + 1 }));
+    });
+
     // ─── Special powers (dashboard shows minimal info) ──────────────
     socket.on('special:prompt', () => {
       // Dashboard doesn't act on special prompts
@@ -321,6 +332,7 @@ export function useDashboardSocket() {
     playerCount,
     voteProgress,
     speechOrder,
+    speechCommand,
     timer,
     phaseResult,
     eliminatedPlayer,

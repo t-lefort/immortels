@@ -650,6 +650,19 @@ router.post('/phase/speech-order', (req, res) => {
   res.json({ order });
 });
 
+// Manually move the highlighted speaker on the dashboard's speech order
+// (admin watches the projected screen and advances at their own pace).
+router.post('/phase/speech-advance', (req, res) => {
+  const dir = req.body?.direction === 'prev' ? 'prev' : 'next';
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:speech_advance', { direction: dir });
+  }
+
+  res.json({ ok: true, direction: dir });
+});
+
 router.post('/timer/start', (req, res) => {
   const { duration } = req.body;
   if (!duration || typeof duration !== 'number' || duration <= 0) {

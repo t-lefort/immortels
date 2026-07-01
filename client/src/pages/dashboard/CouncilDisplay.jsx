@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
  * Shows speech order with current speaker highlighted + countdown,
  * or 10-minute free debate timer, or vote progress during voting.
  */
-export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteProgress, players }) {
+export default function CouncilDisplay({ currentPhase, speechOrder, speechCommand, timer, voteProgress, players }) {
   const alivePlayers = players.filter(p => p.status === 'alive');
   const isSmallGroup = alivePlayers.length <= 10;
   const isVoting = currentPhase?.status === 'voting';
@@ -13,10 +13,41 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
   // Track current speaker index (auto-advance with timer)
   const [currentSpeakerIndex, setCurrentSpeakerIndex] = useState(0);
 
+  // Refs for auto-scrolling the speech list to keep the current speaker visible
+  const listRef = useRef(null);
+  const currentSpeakerRef = useRef(null);
+
   // Reset speaker index when speech order changes
   useEffect(() => {
     setCurrentSpeakerIndex(0);
   }, [speechOrder]);
+
+  // Apply admin "next/prev speaker" commands. The seq guard ensures each command
+  // is applied exactly once, even when the effect re-runs on speechOrder change.
+  // Initialize to the seq present at mount so a leftover command from a previous
+  // council phase isn't replayed when this display remounts.
+  const lastCmdSeqRef = useRef(speechCommand?.seq || 0);
+  useEffect(() => {
+    if (!speechCommand || speechCommand.seq <= lastCmdSeqRef.current) return;
+    lastCmdSeqRef.current = speechCommand.seq;
+    const len = speechOrder?.length || 0;
+    if (len === 0) return;
+    setCurrentSpeakerIndex(prev =>
+      speechCommand.direction === 'prev'
+        ? Math.max(0, prev - 1)
+        : Math.min(len - 1, prev + 1)
+    );
+  }, [speechCommand, speechOrder]);
+
+  // Keep the current speaker centered in the (scrollable) list as it advances.
+  // The dashboard is projected and non-interactive, so the view must follow on its own.
+  useEffect(() => {
+    const container = listRef.current;
+    const el = currentSpeakerRef.current;
+    if (!container || !el) return;
+    const targetScroll = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
+    container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+  }, [currentSpeakerIndex, speechOrder]);
 
   // Timer countdown
   const [timeRemaining, setTimeRemaining] = useState(null);
@@ -231,7 +262,8 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
 
           {/* Speech order list */}
           <div
-            className="flex-1 w-full flex flex-col gap-[0.6vh] overflow-hidden"
+            ref={listRef}
+            className="relative flex-1 w-full flex flex-col gap-[0.6vh] overflow-y-auto scrollbar-hide"
             style={{ maxWidth: '60vw' }}
           >
             {speechOrder && speechOrder.length > 0 ? (
@@ -242,7 +274,8 @@ export default function CouncilDisplay({ currentPhase, speechOrder, timer, voteP
                 return (
                   <div
                     key={speaker.id}
-                    className="flex items-center gap-[1vw] animate-slideInLeft transition-all duration-300"
+                    ref={isCurrent ? currentSpeakerRef : null}
+                    className="flex items-center gap-[1vw] shrink-0 animate-slideInLeft transition-all duration-300"
                     style={{
                       animationDelay: `${index * 60}ms`,
                       animationFillMode: 'both',

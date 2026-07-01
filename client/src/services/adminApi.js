@@ -103,6 +103,13 @@ export function generateSpeechOrder() {
   return request('/phase/speech-order', { method: 'POST' });
 }
 
+export function advanceSpeaker(direction = 'next') {
+  return request('/phase/speech-advance', {
+    method: 'POST',
+    body: JSON.stringify({ direction }),
+  });
+}
+
 export function startTimer(duration) {
   return request('/timer/start', {
     method: 'POST',
