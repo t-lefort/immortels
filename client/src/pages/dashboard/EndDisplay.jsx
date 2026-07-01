@@ -10,12 +10,59 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
   const [visibleCount, setVisibleCount] = useState(0);
   const [showPodium, setShowPodium] = useState(false);
   const [showVictory, setShowVictory] = useState(false);
+  const [fitScale, setFitScale] = useState(1);
   const timerRef = useRef(null);
+  const containerRef = useRef(null);
+  const listRef = useRef(null);
 
   // Sort scoreboard descending by score
   const sorted = scoreboard ? [...scoreboard].sort((a, b) => b.score - a.score) : [];
-  // Display order: from last to first (reverse)
-  const displayOrder = [...sorted].reverse();
+  const count = sorted.length;
+
+  // Annotate each entry with:
+  //  - rank: competition ranking (ties share a rank, then the next rank is
+  //    skipped — e.g. two 3rd places are followed by 5th, not 4th).
+  //  - tier: index of the distinct score (0 = best), used for the top-3
+  //    podium/highlight so tied players land on the same medal step.
+  //  - revealIndex: 0 = lowest score, revealed first (ranking "rises").
+  let compRank = 0;
+  let tier = -1;
+  let lastScore = null;
+  const ranked = sorted.map((player, i) => {
+    if (i === 0 || player.score !== lastScore) {
+      compRank = i + 1;
+      tier += 1;
+      lastScore = player.score;
+    }
+    return {
+      player,
+      rank: compRank,
+      tier,
+      revealIndex: count - 1 - i,
+    };
+  });
+
+  // Podium tiers: the top 3 distinct scores. Each tier can hold several tied
+  // players who share the same medal step and rank label.
+  const podiumGroups = [];
+  for (const entry of ranked) {
+    if (entry.tier > 2) break;
+    if (!podiumGroups[entry.tier]) {
+      podiumGroups[entry.tier] = { rank: entry.rank, score: entry.player.score, players: [] };
+    }
+    podiumGroups[entry.tier].players.push(entry.player);
+  }
+
+  // Split the ranking into balanced columns so that, with a large roster, the
+  // text stays at full size instead of being shrunk down to fit one column.
+  // A single column holds ~18 rows at full size on a 16:9 screen.
+  const COL_CAPACITY = 18;
+  const numCols = Math.min(3, Math.max(1, Math.ceil(count / COL_CAPACITY)));
+  const perCol = Math.ceil(count / numCols) || 1;
+  const columns = [];
+  for (let c = 0; c < numCols; c++) {
+    columns.push(ranked.slice(c * perCol, (c + 1) * perCol));
+  }
 
   // Determine victory: use explicit winner prop or fallback to alive wolves count
   const wolvesWin = winnerProp ? winnerProp === 'wolves' : sorted.filter(p => p.role === 'wolf' && p.status === 'alive').length > 0;
@@ -24,14 +71,14 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
   useEffect(() => {
     if (!scoreboard || scoreboard.length === 0) return;
 
-    let count = 0;
-    const total = displayOrder.length;
+    let revealed = 0;
+    const total = sorted.length;
 
     const reveal = () => {
-      count++;
-      setVisibleCount(count);
+      revealed++;
+      setVisibleCount(revealed);
 
-      if (count >= total) {
+      if (revealed >= total) {
         // Show podium after all entries
         timerRef.current = setTimeout(() => setShowPodium(true), 1000);
         // Show victory message after podium
@@ -57,12 +104,75 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
     };
   }, [scoreboard]);
 
-  // Top 3 for podium
-  const top3 = sorted.slice(0, 3);
+  // Safety net: if the columns still exceed the available height (e.g. a huge
+  // roster, or a shorter-than-16:9 screen), scale the whole list down so every
+  // player stays visible instead of overflowing off-screen.
+  useEffect(() => {
+    const recompute = () => {
+      const container = containerRef.current;
+      const list = listRef.current;
+      if (!container || !list) return;
+      const available = container.clientHeight;
+      const natural = list.scrollHeight;
+      if (available > 0 && natural > 0) {
+        setFitScale(Math.min(1, available / natural));
+      }
+    };
+
+    recompute();
+    const raf = requestAnimationFrame(recompute);
+    window.addEventListener('resize', recompute);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', recompute);
+    };
+  }, [scoreboard]);
 
   const podiumColors = ['#FFD700', '#C0C0C0', '#CD7F32']; // gold, silver, bronze
-  const podiumLabels = ['1er', '2ème', '3ème'];
+  const podiumRgb = ['255,215,0', '192,192,192', '205,127,50'];
   const podiumHeights = ['18vh', '14vh', '11vh'];
+  const ordinal = (r) => (r === 1 ? '1er' : `${r}ème`);
+
+  // Render one podium step (medal tier). Shows every tied player on the step.
+  const renderPodiumStep = (t, { width, nameSize, scoreSize, labelSize, animDelay }) => {
+    const group = podiumGroups[t];
+    if (!group) return null;
+    const color = podiumColors[t];
+    const rgb = podiumRgb[t];
+    return (
+      <div
+        className="flex flex-col items-center animate-podiumRise"
+        style={{ animationDelay: animDelay, animationFillMode: 'both' }}
+      >
+        <div className="flex flex-col items-center mb-[0.5vh] leading-tight">
+          {group.players.map((p) => (
+            <span key={p.id} className="text-white font-bold text-center" style={{ fontSize: nameSize }}>
+              {p.name}
+            </span>
+          ))}
+        </div>
+        <span className="font-mono font-bold mb-[0.5vh]" style={{ fontSize: scoreSize, color }}>
+          {group.score} pts
+        </span>
+        <div
+          style={{
+            width,
+            height: podiumHeights[t],
+            background: `linear-gradient(180deg, rgba(${rgb},0.3) 0%, rgba(${rgb},0.05) 100%)`,
+            border: `1px solid rgba(${rgb},0.4)`,
+            borderRadius: '0.3vw 0.3vw 0 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <span className="font-bold" style={{ fontSize: labelSize, color }}>
+            {ordinal(group.rank)}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -90,11 +200,21 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
           className="flex flex-col p-[1.5vw] overflow-hidden"
           style={{ width: '50%' }}
         >
-          <div className="flex flex-col-reverse gap-[0.3vw] overflow-hidden">
-            {displayOrder.map((player, index) => {
-              const rank = displayOrder.length - index;
-              const isVisible = index < visibleCount;
-              const isTop3 = rank <= 3;
+          <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
+            <div
+              ref={listRef}
+              className="absolute top-0 left-0 flex gap-[1vw]"
+              style={{
+                transform: `scale(${fitScale})`,
+                transformOrigin: 'top left',
+                width: `${100 / fitScale}%`,
+              }}
+            >
+            {columns.map((col, ci) => (
+              <div key={ci} className="flex-1 min-w-0 flex flex-col gap-[0.3vw]">
+              {col.map(({ player, rank, tier, revealIndex }) => {
+              const isVisible = revealIndex < visibleCount;
+              const isPodium = tier < 3;
 
               return (
                 <div
@@ -106,11 +226,11 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
                     transition: 'all 0.4s ease-out',
                     padding: '0.4vw 1vw',
                     borderRadius: '0.3vw',
-                    background: isTop3
-                      ? `rgba(${rank === 1 ? '255,215,0' : rank === 2 ? '192,192,192' : '205,127,50'}, 0.08)`
+                    background: isPodium
+                      ? `rgba(${podiumRgb[tier]}, 0.08)`
                       : 'rgba(255,255,255,0.02)',
-                    border: isTop3
-                      ? `1px solid rgba(${rank === 1 ? '255,215,0' : rank === 2 ? '192,192,192' : '205,127,50'}, 0.2)`
+                    border: isPodium
+                      ? `1px solid rgba(${podiumRgb[tier]}, 0.2)`
                       : '1px solid rgba(255,255,255,0.04)',
                   }}
                 >
@@ -120,8 +240,8 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
                     style={{
                       fontSize: '1.2vw',
                       width: '2.5vw',
-                      color: isTop3
-                        ? podiumColors[rank - 1]
+                      color: isPodium
+                        ? podiumColors[tier]
                         : 'rgba(255,255,255,0.3)',
                     }}
                   >
@@ -133,7 +253,7 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
                     className="font-medium truncate flex-1"
                     style={{
                       fontSize: '1.3vw',
-                      color: isTop3 ? '#fff' : 'rgba(255,255,255,0.6)',
+                      color: isPodium ? '#fff' : 'rgba(255,255,255,0.6)',
                     }}
                   >
                     {player.name}
@@ -155,7 +275,7 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
                     className="font-mono font-bold shrink-0"
                     style={{
                       fontSize: '1.3vw',
-                      color: isTop3 ? podiumColors[rank - 1] : 'rgba(255,255,255,0.5)',
+                      color: isPodium ? podiumColors[tier] : 'rgba(255,255,255,0.5)',
                       width: '3vw',
                       textAlign: 'right',
                     }}
@@ -164,7 +284,10 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
                   </span>
                 </div>
               );
-            })}
+              })}
+              </div>
+            ))}
+            </div>
           </div>
         </div>
 
@@ -191,108 +314,15 @@ export default function EndDisplay({ scoreboard, winner: winnerProp }) {
             </div>
           )}
 
-          {/* Podium */}
-          {showPodium && top3.length >= 1 && (
+          {/* Podium — tied players share a step (see renderPodiumStep) */}
+          {showPodium && podiumGroups.length >= 1 && (
             <div className="flex items-end gap-[1vw]">
-              {/* 2nd place (left) */}
-              {top3.length >= 2 && (
-                <div
-                  className="flex flex-col items-center animate-podiumRise"
-                  style={{ animationDelay: '0.2s', animationFillMode: 'both' }}
-                >
-                  <span className="text-white font-bold mb-[0.5vh]" style={{ fontSize: '1.3vw' }}>
-                    {top3[1].name}
-                  </span>
-                  <span className="font-mono font-bold mb-[0.5vh]" style={{ fontSize: '1.5vw', color: '#C0C0C0' }}>
-                    {top3[1].score} pts
-                  </span>
-                  <div
-                    style={{
-                      width: '8vw',
-                      height: podiumHeights[1],
-                      background: 'linear-gradient(180deg, rgba(192,192,192,0.3) 0%, rgba(192,192,192,0.05) 100%)',
-                      border: '1px solid rgba(192,192,192,0.4)',
-                      borderRadius: '0.3vw 0.3vw 0 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <span
-                      className="font-bold"
-                      style={{ fontSize: '2vw', color: '#C0C0C0' }}
-                    >
-                      {podiumLabels[1]}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* 1st place (center, tallest) */}
-              <div
-                className="flex flex-col items-center animate-podiumRise"
-                style={{ animationDelay: '0.5s', animationFillMode: 'both' }}
-              >
-                <span className="text-white font-bold mb-[0.5vh]" style={{ fontSize: '1.6vw' }}>
-                  {top3[0].name}
-                </span>
-                <span className="font-mono font-bold mb-[0.5vh]" style={{ fontSize: '1.8vw', color: '#FFD700' }}>
-                  {top3[0].score} pts
-                </span>
-                <div
-                  style={{
-                    width: '10vw',
-                    height: podiumHeights[0],
-                    background: 'linear-gradient(180deg, rgba(255,215,0,0.3) 0%, rgba(255,215,0,0.05) 100%)',
-                    border: '1px solid rgba(255,215,0,0.4)',
-                    borderRadius: '0.3vw 0.3vw 0 0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <span
-                    className="font-bold"
-                    style={{ fontSize: '2.5vw', color: '#FFD700' }}
-                  >
-                    {podiumLabels[0]}
-                  </span>
-                </div>
-              </div>
-
-              {/* 3rd place (right) */}
-              {top3.length >= 3 && (
-                <div
-                  className="flex flex-col items-center animate-podiumRise"
-                  style={{ animationDelay: '0.1s', animationFillMode: 'both' }}
-                >
-                  <span className="text-white font-bold mb-[0.5vh]" style={{ fontSize: '1.2vw' }}>
-                    {top3[2].name}
-                  </span>
-                  <span className="font-mono font-bold mb-[0.5vh]" style={{ fontSize: '1.3vw', color: '#CD7F32' }}>
-                    {top3[2].score} pts
-                  </span>
-                  <div
-                    style={{
-                      width: '7vw',
-                      height: podiumHeights[2],
-                      background: 'linear-gradient(180deg, rgba(205,127,50,0.3) 0%, rgba(205,127,50,0.05) 100%)',
-                      border: '1px solid rgba(205,127,50,0.4)',
-                      borderRadius: '0.3vw 0.3vw 0 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <span
-                      className="font-bold"
-                      style={{ fontSize: '1.8vw', color: '#CD7F32' }}
-                    >
-                      {podiumLabels[2]}
-                    </span>
-                  </div>
-                </div>
-              )}
+              {/* 2nd tier (left) */}
+              {renderPodiumStep(1, { width: '8vw', nameSize: '1.3vw', scoreSize: '1.5vw', labelSize: '2vw', animDelay: '0.2s' })}
+              {/* 1st tier (center, tallest) */}
+              {renderPodiumStep(0, { width: '10vw', nameSize: '1.6vw', scoreSize: '1.8vw', labelSize: '2.5vw', animDelay: '0.5s' })}
+              {/* 3rd tier (right) */}
+              {renderPodiumStep(2, { width: '7vw', nameSize: '1.2vw', scoreSize: '1.3vw', labelSize: '1.8vw', animDelay: '0.1s' })}
             </div>
           )}
         </div>
