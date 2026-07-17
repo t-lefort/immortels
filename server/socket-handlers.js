@@ -168,18 +168,22 @@ function sendPlayerStateSync(socket, player) {
       .all();
   }
 
+  const syncedPlayer = {
+    id: player.id,
+    name: player.name,
+    role: player.role,
+    specialRole: player.special_role,
+    status: player.status,
+    role_seen: player.role_seen,
+  };
+  if (gameStatus === 'finished') {
+    syncedPlayer.score = player.score;
+  }
+
   socket.emit('state:sync', {
     gameStatus,
     currentPhase,
-    player: {
-      id: player.id,
-      name: player.name,
-      role: player.role,
-      specialRole: player.special_role,
-      status: player.status,
-      score: player.score,
-      role_seen: player.role_seen,
-    },
+    player: syncedPlayer,
     hasVoted,
     voteCount,
     totalExpected,

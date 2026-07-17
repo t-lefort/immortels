@@ -5,13 +5,16 @@ export default function HistoryTab() {
   const [phases, setPhases] = useState([]);
   const [selectedPhase, setSelectedPhase] = useState(null);
   const [voteData, setVoteData] = useState(null);
+  const [scoreEvents, setScoreEvents] = useState([]);
   const [scoreSnapshots, setScoreSnapshots] = useState([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingScoreEvents, setLoadingScoreEvents] = useState(false);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
 
   useEffect(() => {
     loadPhases();
+    loadScoreEvents();
     loadScoreSnapshots();
   }, []);
 
@@ -43,16 +46,101 @@ export default function HistoryTab() {
     setLoadingSnapshots(false);
   }
 
+  async function loadScoreEvents() {
+    setLoadingScoreEvents(true);
+    try {
+      const data = await api.getScoreEvents(500);
+      setScoreEvents(Array.isArray(data) ? data : []);
+    } catch {
+      setScoreEvents([]);
+    }
+    setLoadingScoreEvents(false);
+  }
+
   function selectSnapshot(snapshot) {
     setSelectedSnapshot(snapshot);
   }
 
   return (
     <div className="space-y-4">
+      {/* Human-readable score event log */}
+      <div className="bg-gray-900 rounded-lg p-4 border border-cyan-900/40">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-lg font-semibold">Journal des points ({scoreEvents.length})</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Chaque ligne explique un gain, une perte ou une annulation, avec le score avant et après.
+            </p>
+          </div>
+          <button
+            onClick={loadScoreEvents}
+            className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 border border-gray-700"
+          >
+            Rafraîchir
+          </button>
+        </div>
+
+        {loadingScoreEvents ? (
+          <p className="text-gray-500 text-sm">Chargement...</p>
+        ) : scoreEvents.length === 0 ? (
+          <p className="text-gray-500 text-sm">Aucun mouvement de score enregistré</p>
+        ) : (
+          <div className="max-h-[32rem] overflow-auto border border-gray-800 rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-900 z-10">
+                <tr className="border-b border-gray-700 text-gray-400 text-left">
+                  <th className="px-3 py-2 whitespace-nowrap">Moment</th>
+                  <th className="px-3 py-2 whitespace-nowrap">Étape</th>
+                  <th className="px-3 py-2">Joueur</th>
+                  <th className="px-3 py-2">Explication</th>
+                  <th className="px-3 py-2 text-right whitespace-nowrap">Variation</th>
+                  <th className="px-3 py-2 text-right whitespace-nowrap">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreEvents.map(event => (
+                  <tr key={event.id} className="border-b border-gray-800/60 hover:bg-gray-800/40">
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                      {formatScoreEventTime(event.createdAt)}
+                    </td>
+                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">
+                      {scoreEventSourceLabel(event)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-white">{event.playerName}</div>
+                      <div className="text-[10px] text-gray-600">
+                        {event.playerRole === 'wolf' ? 'Loup' : 'Villageois'} · {event.playerStatus === 'alive' ? 'vivant' : 'fantôme'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-300">
+                      <div>{scoreEventReasonLabel(event)}</div>
+                      {scoreEventDetail(event) && (
+                        <div className="text-[10px] text-gray-500 mt-0.5">{scoreEventDetail(event)}</div>
+                      )}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-bold text-sm ${event.delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {event.delta > 0 ? '+' : ''}{event.delta}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <span className="text-gray-500">{event.scoreBefore}</span>
+                      <span className="text-gray-600 mx-1">→</span>
+                      <span className="text-white font-semibold">{event.scoreAfter}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Score snapshots */}
       <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Snapshots de score ({scoreSnapshots.length})</h2>
+          <div>
+            <h2 className="text-lg font-semibold">Sauvegardes techniques ({scoreSnapshots.length})</h2>
+            <p className="text-xs text-gray-600">État complet avant une modification, utile pour la récupération.</p>
+          </div>
           <button
             onClick={loadScoreSnapshots}
             className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 border border-gray-700"
@@ -282,6 +370,67 @@ function formatSnapshotTime(value) {
   const d = new Date(normalized);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString('fr-FR');
+}
+
+function formatScoreEventTime(value) {
+  if (!value) return '—';
+  const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function scoreEventSourceLabel(event) {
+  if (event.sourceType === 'phase_undo') return `Annulation phase #${event.phaseId || event.sourceId}`;
+  if (event.sourceType === 'phase') {
+    const type = event.metadata?.phaseType === 'night' ? 'Nuit' : 'Conseil';
+    return `${type} #${event.phaseId || event.sourceId}`;
+  }
+  if (event.sourceType === 'hunter') return event.phaseId ? `Chasseur · phase #${event.phaseId}` : 'Chasseur';
+  if (event.sourceType === 'challenge') return event.metadata?.challengeName || `Épreuve #${event.sourceId}`;
+  if (event.sourceType === 'game_end') return 'Fin de partie';
+  if (event.sourceType === 'admin') return 'Correction admin';
+  return event.sourceType || 'Score';
+}
+
+function scoreEventReasonLabel(event) {
+  const labels = {
+    villager_guess_correct: 'Bonne devinette : villageois identifié',
+    ghost_identified_wolf: 'Fantôme : loup correctement identifié',
+    ghost_identified_wrong: 'Fantôme : mauvaise identification',
+    ghost_wolf_eliminated_villager: 'Fantôme loup : villageois éliminé',
+    villager_voted_wolf: 'Vote du conseil contre un loup',
+    wolf_survived_council: 'Loup survivant au conseil',
+    challenge_winner: 'Membre de l’équipe gagnante',
+    winning_faction: 'Victoire de la faction',
+    winning_faction_survivor: 'Victoire de la faction + bonus de survie',
+    hunter_killed_wolf: 'Chasseur : loup éliminé',
+    hunter_killed_villager: 'Chasseur : villageois éliminé',
+    admin_score_override: 'Score corrigé manuellement',
+    phase_score_reverted: 'Points de la phase annulés',
+  };
+
+  if (event.reason === 'phase_score_reverted' && event.metadata?.originalReason) {
+    return `Annulation : ${labels[event.metadata.originalReason] || event.metadata.originalReason}`;
+  }
+  return labels[event.reason] || event.reason || 'Mouvement de score';
+}
+
+function scoreEventDetail(event) {
+  if (event.metadata?.targetName) return `Cible : ${event.metadata.targetName}`;
+  if (event.sourceType === 'game_end') {
+    return event.metadata?.winner === 'wolves' ? 'Victoire des Loups' : 'Victoire des Villageois';
+  }
+  if (event.reason === 'admin_score_override') {
+    return `Correction de ${event.metadata?.previousScore} à ${event.metadata?.newScore}`;
+  }
+  return '';
 }
 
 function snapshotReasonLabel(reason) {

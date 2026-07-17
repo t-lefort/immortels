@@ -14,6 +14,7 @@ import {
 } from './socket-rooms.js';
 import logger from './logger.js';
 import { recordScoreSnapshot } from './score-snapshots.js';
+import { recordScoreEvent } from './score-events.js';
 import { hasSpecialRole, addSpecialRole, removeSpecialRole, sqlHasRole } from './role-helpers.js';
 
 // ─── Maire (Mayor) ──────────────────────────────────────────────────────────
@@ -484,6 +485,25 @@ export function handleChasseur(io, hunterId) {
 let hunterChainDepth = 0;
 const MAX_HUNTER_CHAIN_DEPTH = 5;
 
+function appendPhaseScoreChange(phaseId, change) {
+  if (!phaseId) return;
+
+  const key = `score_changes_phase_${phaseId}`;
+  let scoreChanges = [];
+  const existing = getSetting(key);
+  if (existing) {
+    try {
+      const parsed = JSON.parse(existing);
+      if (Array.isArray(parsed)) scoreChanges = parsed;
+    } catch {
+      // Replace malformed recovery data with the valid change below.
+    }
+  }
+
+  scoreChanges.push(change);
+  setSetting(key, JSON.stringify(scoreChanges));
+}
+
 /**
  * Process the hunter's choice — eliminate target and compute scoring.
  * Chain reaction: if target is also a hunter, trigger their power too.
@@ -534,6 +554,10 @@ export function processChasseurResponse(io, targetId, phaseId) {
     scoreReason = 'hunter_killed_villager';
   }
 
+  const hunterPlayer = hunterId
+    ? db.prepare('SELECT name FROM players WHERE id = ?').get(hunterId)
+    : null;
+
   if (scoreDelta !== 0 && hunterId) {
     recordScoreSnapshot('hunter_score', {
       hunterId,
@@ -541,7 +565,24 @@ export function processChasseurResponse(io, targetId, phaseId) {
       scoreDelta,
       scoreReason,
     });
-    db.prepare('UPDATE players SET score = score + ? WHERE id = ?').run(scoreDelta, hunterId);
+    db.transaction(() => {
+      db.prepare('UPDATE players SET score = score + ? WHERE id = ?').run(scoreDelta, hunterId);
+      recordScoreEvent({
+        playerId: hunterId,
+        phaseId: effectivePhaseId,
+        sourceType: 'hunter',
+        sourceId: Number(targetId),
+        reason: scoreReason,
+        delta: scoreDelta,
+        metadata: { targetId: Number(targetId), targetName: target.name, targetRole: target.role },
+      }, db);
+    })();
+    appendPhaseScoreChange(effectivePhaseId, {
+      playerId: hunterId,
+      playerName: hunterPlayer?.name || 'Chasseur',
+      delta: scoreDelta,
+      reason: scoreReason,
+    });
   }
 
   // Broadcast elimination
@@ -555,10 +596,6 @@ export function processChasseurResponse(io, targetId, phaseId) {
   });
 
   // Get hunter name for dashboard display
-  const hunterPlayer = hunterId
-    ? db.prepare('SELECT name FROM players WHERE id = ?').get(hunterId)
-    : null;
-
   // Show dramatic hunter kill on dashboard
   emitToDashboard(io, 'dashboard:hunter_kill', {
     hunterName: hunterPlayer?.name || 'Chasseur',

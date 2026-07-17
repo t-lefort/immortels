@@ -10,7 +10,7 @@ const sections = [
     content: (
       <>
         <p className="mb-3">
-          <strong>Les Immortels</strong> est un jeu de Loup-Garou grandeur nature.
+          <strong>Les Immortels</strong> est un jeu de Loup-Garou adapté pour les grands groupes.
         </p>
         <p className="mb-3">
           Au début de la partie, chaque joueur reçoit secrètement un rôle :
@@ -37,7 +37,7 @@ const sections = [
           <h4 className="text-red-400 font-semibold mb-2">Loup</h4>
           <ul className="text-gray-300 space-y-1 text-sm">
             <li>- Vote chaque nuit pour éliminer un villageois</li>
-            <li>- Peut communiquer discrètement avec les autres loups en journée</li>
+            <li>- Peut communiquer discrètement avec les autres loups entre les phases de jeu</li>
             <li>- Connaît l'identité des autres loups lors de la révélation du rôle. Retenez bien qui sont vos alliés ou allez discretement redemander au maitre du jeu.</li>
           </ul>
         </div>
@@ -65,7 +65,7 @@ const sections = [
         <ul className="space-y-2 text-gray-300 text-sm mb-3">
           <li>
             <strong className="text-red-400">Les loups</strong> choisissent un joueur vivant
-            (hors loups) à éliminer. La majorité l'emporte. Si égalité, tirage au sort parmi les ex-æquo. Les loups peuvent se concerter discrètement avant de voter.
+            (hors loups) à éliminer. La majorité l'emporte. Si égalité, tirage au sort parmi les ex-æquo.
           </li>
           <li>
             <strong className="text-blue-400">Les villageois</strong> choisissent un joueur
@@ -104,7 +104,7 @@ const sections = [
             <ul className="text-gray-300 space-y-1">
               <li>- Chaque joueur vivant vote pour éliminer un suspect</li>
               <li>- Le joueur avec le plus de votes est éliminé</li>
-              <li>- En cas d'égalité, le maire tranche (sinon tirage au sort)</li>
+              <li>- En cas d'égalité, le maire tranche</li>
               <li>- Le rôle de l'éliminé est révélé publiquement</li>
             </ul>
           </div>
@@ -126,15 +126,15 @@ const sections = [
           <div className="bg-green-900/10 border border-green-900/30 rounded-lg p-3">
             <p className="text-green-400 font-semibold mb-1">Vote d'élimination</p>
             <p className="text-gray-300">
-              Chaque nuit, chaque fantôme vote individuellement (sans se concerter) pour
+              Chaque nuit, chaque fantôme vote individuellement pour
               éliminer un joueur vivant. Majorité gagne, égalité = tirage au sort.
             </p>
           </div>
           <div className="bg-green-900/10 border border-green-900/30 rounded-lg p-3">
             <p className="text-green-400 font-semibold mb-1">Identification (fantômes villageois)</p>
             <p className="text-gray-300">
-              Les fantômes qui étaient villageois peuvent sélectionner des joueurs qu'ils
-              soupçonnent d'être des loups. +1 point par loup identifié, -1 par erreur.
+              Les fantômes qui étaient villageois peuvent sélectionner jusqu'à deux joueurs
+              qu'ils soupçonnent d'être des loups. +2 points par loup identifié, -1 par erreur.
             </p>
           </div>
         </div>
@@ -169,8 +169,12 @@ const sections = [
                 <td className="text-right text-green-400 font-semibold">+1</td>
               </tr>
               <tr className="border-b border-gray-800">
-                <td className="py-2 pr-3">Survivant de l'équipe gagnante</td>
-                <td className="text-right text-green-400 font-semibold">+3</td>
+                <td className="py-2 pr-3">Membre de la faction gagnante, vivant ou fantôme</td>
+                <td className="text-right text-green-400 font-semibold">+2</td>
+              </tr>
+              <tr className="border-b border-gray-800">
+                <td className="py-2 pr-3">Survivant de la faction gagnante</td>
+                <td className="text-right text-green-400 font-semibold">+1 supplémentaire</td>
               </tr>
               <tr className="border-b border-gray-800">
                 <td className="py-2 pr-3">Villageois vote contre un loup au conseil</td>
@@ -181,8 +185,8 @@ const sections = [
                 <td className="text-right text-green-400 font-semibold">+2</td>
               </tr>
               <tr className="border-b border-gray-800">
-                <td className="py-2 pr-3">Fantôme villageois identifie un loup</td>
-                <td className="text-right text-green-400 font-semibold">+1</td>
+                <td className="py-2 pr-3">Fantôme villageois identifie un loup (2 choix maximum par nuit)</td>
+                <td className="text-right text-green-400 font-semibold">+2</td>
               </tr>
               <tr className="border-b border-gray-800">
                 <td className="py-2 pr-3">Fantôme villageois se trompe</td>

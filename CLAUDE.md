@@ -58,7 +58,7 @@ les-immortels/
 - Night power activation order: Protector → Sorcière → Voyante → then admin reveals results
 - Scores are computed automatically but hidden from players until game end
 
-## Database Schema (7 tables)
+## Database Schema (9 tables)
 
 - **`game_settings`**: key/value store for all game state (current phase, admin password, protected player, witch/seer uses, mayor, etc.)
 - **`players`**: id, name (unique), role (wolf/villager), special_role (one max), status (alive/ghost), session_token, score
@@ -67,6 +67,8 @@ les-immortels/
 - **`votes`**: phase_id, voter_id, target_id, vote_type (wolf/ghost_eliminate/village/villager_guess), is_valid
 - **`ghost_identifications`**: phase_id, ghost_id, target_id, target_is_wolf
 - **`challenges`**: name, winning team player IDs, special_role_awarded, awarded_to_player_id
+- **`score_snapshots`**: full score backups captured before important mutations
+- **`score_events`**: one row per score gain/loss with reason, source, and before/after totals
 
 ## Real-Time Communication (Socket.IO)
 

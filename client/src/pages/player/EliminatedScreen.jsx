@@ -51,7 +51,7 @@ export default function EliminatedScreen({ onContinue }) {
               <p className="text-white font-medium">Identification des loups</p>
               <p className="text-gray-500 text-sm">
                 Si vous étiez villageois, identifiez qui sont les loups.
-                +1 point par identification correcte, -1 si incorrect.
+                Jusqu'à deux choix : +2 points par identification correcte, -1 si incorrect.
               </p>
             </div>
           </li>

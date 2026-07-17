@@ -1,7 +1,14 @@
 import { getDb, getSetting, setSetting } from './db.js';
 import logger from './logger.js';
 import { recordScoreSnapshot } from './score-snapshots.js';
+import { recordScoreEvent } from './score-events.js';
 import { sqlHasRole } from './role-helpers.js';
+import {
+  MAX_GHOST_IDENTIFICATIONS,
+  getGhostIdentificationDelta,
+  getWinningFactionDelta,
+  validateGhostIdentificationTargets,
+} from './scoring-rules.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -188,11 +195,12 @@ export function submitVote(phaseId, voterId, targetId, voteType) {
 }
 
 /**
- * Submit ghost identifications (batch). One ghost can identify multiple targets.
+ * Submit one or two distinct ghost identifications.
  * Deduplicates: clears previous identifications for this ghost+phase before inserting.
  */
 export function submitGhostIdentifications(phaseId, ghostId, targetIds) {
   const db = getDb();
+  const normalizedTargetIds = validateGhostIdentificationTargets(targetIds);
 
   db.transaction(() => {
     // Clear previous identifications for this ghost in this phase
@@ -204,7 +212,7 @@ export function submitGhostIdentifications(phaseId, ghostId, targetIds) {
     const insert = db.prepare(
       'INSERT INTO ghost_identifications (phase_id, ghost_id, target_id, target_is_wolf) VALUES (?, ?, ?, 0)'
     );
-    for (const targetId of targetIds) {
+    for (const targetId of normalizedTargetIds) {
       insert.run(phaseId, ghostId, targetId);
     }
   })();
@@ -551,13 +559,27 @@ export function computePhaseScores(phaseId) {
   recordScoreSnapshot('phase_scores', { phaseId, phaseType: phase.type });
 
   const changes = [];
-  const addScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
+  const updateScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
+  const applyScore = (change) => {
+    updateScore.run(change.delta, change.playerId);
+    recordScoreEvent({
+      playerId: change.playerId,
+      phaseId,
+      sourceType: 'phase',
+      sourceId: phaseId,
+      reason: change.reason,
+      delta: change.delta,
+      metadata: { phaseType: phase.type, ...(change.metadata || {}) },
+    }, db);
+    const { metadata, ...publicChange } = change;
+    changes.push(publicChange);
+  };
 
   db.transaction(() => {
     if (phase.type === 'night') {
-      computeNightScores(db, phaseId, changes, addScore);
+      computeNightScores(db, phaseId, applyScore);
     } else if (phase.type === 'village_council') {
-      computeCouncilScores(db, phaseId, changes, addScore);
+      computeCouncilScores(db, phaseId, applyScore);
     }
   })();
 
@@ -567,51 +589,73 @@ export function computePhaseScores(phaseId) {
 /**
  * Night scoring rules:
  * - Villager guess: +1 if target is actually a villager
- * - Ghost villager identifies wolf: +1 per correct identification
+ * - Ghost villager identifies wolf: +2 per correct identification
  * - Ghost villager wrong: -1 per incorrect identification
  * - Ghost wolf: +3 if voted for the ghost-eliminated villager
  */
-function computeNightScores(db, phaseId, changes, addScore) {
+function computeNightScores(db, phaseId, applyScore) {
   // --- Villager guess scoring ---
   const guesses = db.prepare(`
-    SELECT v.voter_id, voter.name AS voter_name, target.role AS target_role
+    SELECT v.id AS vote_id, v.voter_id, voter.name AS voter_name,
+           target.id AS target_id, target.name AS target_name, target.role AS target_role
     FROM votes v
     JOIN players voter  ON v.voter_id = voter.id
     JOIN players target ON v.target_id = target.id
     WHERE v.phase_id = ? AND v.vote_type = 'villager_guess' AND v.is_valid = 1 AND v.target_id IS NOT NULL
+      AND voter.role = 'villager'
   `).all(phaseId);
 
   for (const guess of guesses) {
     if (guess.target_role === 'villager') {
-      addScore.run(1, guess.voter_id);
-      changes.push({ playerId: guess.voter_id, playerName: guess.voter_name, delta: 1, reason: 'villager_guess_correct' });
+      applyScore({
+        playerId: guess.voter_id,
+        playerName: guess.voter_name,
+        delta: 1,
+        reason: 'villager_guess_correct',
+        metadata: { voteId: guess.vote_id, targetId: guess.target_id, targetName: guess.target_name },
+      });
     }
   }
 
   // --- Ghost identification scoring ---
   const identifications = db.prepare(`
-    SELECT gi.ghost_id, g.name AS ghost_name, g.role AS ghost_role, gi.target_is_wolf
+    SELECT gi.id, gi.ghost_id, gi.target_id, g.name AS ghost_name, g.role AS ghost_role,
+           target.name AS target_name, gi.target_is_wolf
     FROM ghost_identifications gi
     JOIN players g ON gi.ghost_id = g.id
+    JOIN players target ON gi.target_id = target.id
     WHERE gi.phase_id = ?
+    ORDER BY gi.id ASC
   `).all(phaseId);
 
+  const scoredTargetsByGhost = new Map();
   for (const ident of identifications) {
     // Only villager ghosts score from identifications
     if (ident.ghost_role !== 'villager') continue;
 
-    if (ident.target_is_wolf) {
-      addScore.run(1, ident.ghost_id);
-      changes.push({ playerId: ident.ghost_id, playerName: ident.ghost_name, delta: 1, reason: 'ghost_identified_wolf' });
-    } else {
-      addScore.run(-1, ident.ghost_id);
-      changes.push({ playerId: ident.ghost_id, playerName: ident.ghost_name, delta: -1, reason: 'ghost_identified_wrong' });
+    const scoredTargets = scoredTargetsByGhost.get(ident.ghost_id) || new Set();
+    if (scoredTargets.has(ident.target_id) || scoredTargets.size >= MAX_GHOST_IDENTIFICATIONS) {
+      continue;
     }
+    scoredTargets.add(ident.target_id);
+    scoredTargetsByGhost.set(ident.ghost_id, scoredTargets);
+
+    const delta = getGhostIdentificationDelta(ident.target_is_wolf === 1);
+    const reason = ident.target_is_wolf === 1
+      ? 'ghost_identified_wolf'
+      : 'ghost_identified_wrong';
+    applyScore({
+      playerId: ident.ghost_id,
+      playerName: ident.ghost_name,
+      delta,
+      reason,
+      metadata: { identificationId: ident.id, targetId: ident.target_id, targetName: ident.target_name },
+    });
   }
 
   // --- Ghost wolf bonus: +3 for wolf ghosts who voted for the eliminated villager ---
   const ghostVictim = db.prepare(`
-    SELECT pv.player_id, p.role AS victim_role
+    SELECT pv.player_id, p.name AS victim_name, p.role AS victim_role
     FROM phase_victims pv
     JOIN players p ON pv.player_id = p.id
     WHERE pv.phase_id = ? AND pv.eliminated_by = 'ghosts' AND pv.was_protected = 0 AND pv.was_resurrected = 0
@@ -620,15 +664,24 @@ function computeNightScores(db, phaseId, changes, addScore) {
   if (ghostVictim && ghostVictim.victim_role === 'villager') {
     // Only wolf ghosts who voted for this specific victim get +3
     const wolfGhostsWhoVoted = db.prepare(`
-      SELECT p.id, p.name FROM votes v
+      SELECT v.id AS vote_id, p.id, p.name FROM votes v
       JOIN players p ON v.voter_id = p.id
       WHERE v.phase_id = ? AND v.vote_type = 'ghost_eliminate' AND v.target_id = ? AND v.is_valid = 1
         AND p.role = 'wolf' AND p.status = 'ghost'
     `).all(phaseId, ghostVictim.player_id);
 
     for (const gw of wolfGhostsWhoVoted) {
-      addScore.run(3, gw.id);
-      changes.push({ playerId: gw.id, playerName: gw.name, delta: 3, reason: 'ghost_wolf_eliminated_villager' });
+      applyScore({
+        playerId: gw.id,
+        playerName: gw.name,
+        delta: 3,
+        reason: 'ghost_wolf_eliminated_villager',
+        metadata: {
+          voteId: gw.vote_id,
+          targetId: ghostVictim.player_id,
+          targetName: ghostVictim.victim_name,
+        },
+      });
     }
   }
 }
@@ -638,10 +691,11 @@ function computeNightScores(db, phaseId, changes, addScore) {
  * - Villager voted for a wolf: +2 (even if the wolf isn't eliminated)
  * - Wolf survived the council: +2
  */
-function computeCouncilScores(db, phaseId, changes, addScore) {
+function computeCouncilScores(db, phaseId, applyScore) {
   // --- Villagers who voted for a wolf: +2 ---
   const villagerWolfVotes = db.prepare(`
-    SELECT v.voter_id, voter.name AS voter_name
+    SELECT v.id AS vote_id, v.voter_id, voter.name AS voter_name,
+           target.id AS target_id, target.name AS target_name
     FROM votes v
     JOIN players voter  ON v.voter_id = voter.id
     JOIN players target ON v.target_id = target.id
@@ -651,8 +705,13 @@ function computeCouncilScores(db, phaseId, changes, addScore) {
   `).all(phaseId);
 
   for (const vote of villagerWolfVotes) {
-    addScore.run(2, vote.voter_id);
-    changes.push({ playerId: vote.voter_id, playerName: vote.voter_name, delta: 2, reason: 'villager_voted_wolf' });
+    applyScore({
+      playerId: vote.voter_id,
+      playerName: vote.voter_name,
+      delta: 2,
+      reason: 'villager_voted_wolf',
+      metadata: { voteId: vote.vote_id, targetId: vote.target_id, targetName: vote.target_name },
+    });
   }
 
   // --- Wolves who survived the council: +2 ---
@@ -661,8 +720,7 @@ function computeCouncilScores(db, phaseId, changes, addScore) {
   `).all();
 
   for (const wolf of survivingWolves) {
-    addScore.run(2, wolf.id);
-    changes.push({ playerId: wolf.id, playerName: wolf.name, delta: 2, reason: 'wolf_survived_council' });
+    applyScore({ playerId: wolf.id, playerName: wolf.name, delta: 2, reason: 'wolf_survived_council' });
   }
 }
 
@@ -679,7 +737,7 @@ export function computeChallengeScores(challengeId) {
 
   let winningPlayerIds;
   try {
-    winningPlayerIds = JSON.parse(challenge.winning_team_player_ids);
+    winningPlayerIds = [...new Set(JSON.parse(challenge.winning_team_player_ids).map(Number))];
   } catch {
     winningPlayerIds = [];
   }
@@ -697,7 +755,16 @@ export function computeChallengeScores(challengeId) {
       const player = getPlayer.get(playerId);
       if (player) {
         addScore.run(playerId);
-        changes.push({ playerId, playerName: player.name, delta: 1, reason: 'challenge_winner' });
+        const change = { playerId, playerName: player.name, delta: 1, reason: 'challenge_winner' };
+        recordScoreEvent({
+          playerId,
+          sourceType: 'challenge',
+          sourceId: challengeId,
+          reason: change.reason,
+          delta: change.delta,
+          metadata: { challengeName: challenge.name },
+        }, db);
+        changes.push(change);
       }
     }
   })();
@@ -706,24 +773,45 @@ export function computeChallengeScores(challengeId) {
 }
 
 /**
- * Compute and apply final scores: +3 for each surviving player of the winning team.
+ * Compute and apply final scores:
+ * - +2 for every player in the winning faction, alive or ghost
+ * - +1 additional bonus for survivors in that faction
  * @param {string} winner - 'wolves' or 'villagers'
  */
 export function computeFinalScores(winner) {
+  if (!['wolves', 'villagers'].includes(winner)) {
+    throw new Error(`Invalid winner: ${winner}`);
+  }
+
   const db = getDb();
   recordScoreSnapshot('final_scores', { winner });
   const winningRole = winner === 'wolves' ? 'wolf' : 'villager';
-  const survivors = db.prepare(
-    "SELECT id, name FROM players WHERE status = 'alive' AND role = ?"
+  const winningPlayers = db.prepare(
+    'SELECT id, name, status FROM players WHERE role = ?'
   ).all(winningRole);
 
   const changes = [];
-  const addScore = db.prepare('UPDATE players SET score = score + 3 WHERE id = ?');
+  const addScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
 
   db.transaction(() => {
-    for (const player of survivors) {
-      addScore.run(player.id);
-      changes.push({ playerId: player.id, playerName: player.name, delta: 3, reason: 'survivor' });
+    for (const player of winningPlayers) {
+      const delta = getWinningFactionDelta(player.status);
+      addScore.run(delta, player.id);
+      const change = {
+        playerId: player.id,
+        playerName: player.name,
+        delta,
+        reason: player.status === 'alive' ? 'winning_faction_survivor' : 'winning_faction',
+      };
+      recordScoreEvent({
+        playerId: player.id,
+        sourceType: 'game_end',
+        sourceId: winner,
+        reason: change.reason,
+        delta,
+        metadata: { winner, survived: player.status === 'alive' },
+      }, db);
+      changes.push(change);
     }
   })();
 

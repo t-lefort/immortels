@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import * as api from '../../services/adminApi.js';
+import { rankScoreboard } from '../../utils/scoreRanking.js';
 
 export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
   const [scoreboard, setScoreboard] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const rankedScoreboard = rankScoreboard(scoreboard);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
 
@@ -21,7 +23,7 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
 
   async function handleEndGame(winner) {
     const winnerLabel = winner === 'wolves' ? 'des Loups' : 'des Villageois';
-    if (!confirm(`Terminer la partie avec la victoire ${winnerLabel} ? (+3 pour chaque survivant)`)) return;
+    if (!confirm(`Terminer la partie avec la victoire ${winnerLabel} ? (+2 à toute la faction, +1 supplémentaire aux survivants)`)) return;
 
     setLoading(true);
     try {
@@ -29,7 +31,7 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
       setScoreboard(result.scoreboard);
       setMessage({
         type: 'success',
-        text: `Partie terminee - Victoire ${winnerLabel}. ${result.scoreChanges.length} bonus de survie appliques.`,
+        text: `Partie terminée - Victoire ${winnerLabel}. ${result.scoreChanges.length} bonus de faction appliqués.`,
       });
       refreshPlayers();
     } catch (err) {
@@ -200,16 +202,16 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
             </tr>
           </thead>
           <tbody>
-            {scoreboard.map((p, i) => {
+            {rankedScoreboard.map((p) => {
               // Row background: top 3 get gold tint, wolves get subtle red, ghosts get subtle green
               let rowBg = '';
-              if (i < 3) {
+              if (p.tier < 3) {
                 rowBg = 'bg-yellow-900/10';
               }
 
               return (
                 <tr key={p.id} className={`border-b border-gray-800/50 ${rowBg}`}>
-                  <td className="px-3 py-2 text-gray-500 font-mono">{i + 1}</td>
+                  <td className="px-3 py-2 text-gray-500 font-mono">{p.rank}</td>
                   <td className="px-3 py-2">
                     <span className={`font-medium ${
                       p.role === 'wolf' ? 'text-red-200' :

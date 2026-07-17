@@ -31,7 +31,7 @@ Créer la structure complète du projet, installer les dépendances, configurer 
 
 **Fichier : `server/db.js`**
 
-Créer les 7 tables :
+Créer les 9 tables :
 
 | Table | Rôle |
 |-------|------|
@@ -42,12 +42,14 @@ Créer les 7 tables :
 | `votes` | phase_id, voter_id, target_id, vote_type (wolf/ghost_eliminate/village/villager_guess), is_valid |
 | `ghost_identifications` | phase_id, ghost_id, target_id, target_is_wolf |
 | `challenges` | name, after_phase_id, winning_team_player_ids (JSON), special_role_awarded, awarded_to_player_id, timestamp |
+| `score_snapshots` | sauvegarde complète des scores avant chaque mutation importante |
+| `score_events` | journal détaillé de chaque gain/perte avec raison, source et scores avant/après |
 
 Exports : `getDb()`, `getSetting(key)`, `setSetting(key, value)`, `getAllSettings()`, `resetGame()`.
 
 Pragmas : WAL mode, foreign keys ON. Valeurs par défaut insérées à l'init.
 
-**Vérification :** Au démarrage, `data/game.db` est créé avec les 7 tables et les settings par défaut.
+**Vérification :** Au démarrage, `data/game.db` est créé avec les 9 tables et les settings par défaut.
 
 ---
 
@@ -107,7 +109,7 @@ Règles d'égalité : Loups → admin tranche | Village → maire ou tirage au s
 - `ChallengesTab.jsx` — enregistrer épreuve, attribuer rôle spécial
 - `PlayersTab.jsx` — tableau complet avec édition inline (rôle, statut, score, special_role)
 - `ScoresTab.jsx` — classement complet, override scores
-- `HistoryTab.jsx` — historique votes détaillé par phase
+- `HistoryTab.jsx` — historique des votes et journal détaillé des gains/pertes de score
 - `SettingsTab.jsx` — édition game_settings, mode test, reset
 
 **Fichiers support :** `client/src/hooks/useAdminSocket.js`, `client/src/services/adminApi.js`
@@ -223,11 +225,12 @@ Implémentation complète dans `server/game-engine.js` :
 | Condition | Points | Moment |
 |-----------|--------|--------|
 | Villageois devine un villageois la nuit | +1 | Fin de nuit, si le joueur choisi est effectivement villageois |
-| Équipe gagne épreuve | +1 | Enregistrement épreuve, joueurs vivants de l'équipe |
-| Survivant final | +3 | Fin de partie |
+| Équipe gagne épreuve | +1 | Enregistrement épreuve, joueurs de l'équipe vivants ou fantômes |
+| Membre de la faction gagnante | +2 | Fin de partie, vivant ou fantôme |
+| Survivant de la faction gagnante | +1 supplémentaire | Fin de partie |
 | Villageois vote contre un loup au conseil | +2 | Fin de conseil (même si le loup n'est pas éliminé) |
-| Loup survit au conseil | +1 | Fin de conseil |
-| Fantôme villageois identifie un loup | +1 | Fin de nuit |
+| Loup survit au conseil | +2 | Fin de conseil |
+| Fantôme villageois identifie un loup | +2 | Fin de nuit, 2 identifications maximum |
 | Fantôme villageois se trompe | -1 | Fin de nuit |
 | Fantôme loup + villageois éliminé par fantômes | +3 | Fin de nuit |
 | Chasseur tue un loup | +2 | Activation du chasseur |
@@ -301,7 +304,7 @@ Phase 13: Mode test + polish      [toutes]
 ## Fichiers critiques
 
 - [server/game-engine.js](server/game-engine.js) — coeur de la logique : phases, votes, victimes, scoring, devinette villageois
-- [server/db.js](server/db.js) — schéma 7 tables, helpers, migrations
+- [server/db.js](server/db.js) — schéma 9 tables, helpers, migrations
 - [server/socket-handlers.js](server/socket-handlers.js) — coordination temps réel admin ↔ joueurs ↔ dashboard
 - [client/src/pages/admin/PhaseControlTab.jsx](client/src/pages/admin/PhaseControlTab.jsx) — écran admin le plus complexe (votes, résultats, pouvoirs)
 - [client/src/pages/player/PlayerPage.jsx](client/src/pages/player/PlayerPage.jsx) — routeur d'écrans pour les 30 joueurs

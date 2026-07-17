@@ -4,6 +4,8 @@ import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
 import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
 
+const MAX_IDENTIFICATIONS = 2;
+
 /**
  * Ghost vote during night phase.
  * Vote to eliminate a living player.
@@ -37,7 +39,7 @@ export default function NightGhostVote() {
       const next = new Set(prev);
       if (next.has(playerId)) {
         next.delete(playerId);
-      } else {
+      } else if (next.size < MAX_IDENTIFICATIONS) {
         next.add(playerId);
       }
       return next;
@@ -139,8 +141,8 @@ export default function NightGhostVote() {
               Identification des loups
             </h3>
             <p className="text-gray-500 text-xs mb-4">
-              Sélectionnez les joueurs que vous soupçonnez d'être des loups
-              (+1 si correct, -1 si incorrect)
+              Sélectionnez jusqu'à deux joueurs que vous soupçonnez d'être des loups
+              (+2 si correct, -1 si incorrect)
             </p>
           </div>
 
@@ -151,29 +153,39 @@ export default function NightGhostVote() {
           ) : (
             <>
               <div className="space-y-2 mb-4">
-                {alivePlayers.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => toggleSuspect(p.id)}
-                    className={`
-                      w-full text-left rounded-lg border p-3 min-h-[48px] transition-all
-                      ${suspectedWolves.has(p.id)
-                        ? 'border-yellow-600 bg-yellow-900/20'
-                        : 'border-gray-700 bg-gray-800/50 active:bg-gray-700/70'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-white font-medium">{p.name}</span>
-                      {suspectedWolves.has(p.id) && (
-                        <span className="text-yellow-500 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-900/30">
-                          Suspect
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                {alivePlayers.map((p) => {
+                  const selected = suspectedWolves.has(p.id);
+                  const selectionFull = suspectedWolves.size >= MAX_IDENTIFICATIONS;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => toggleSuspect(p.id)}
+                      disabled={!selected && selectionFull}
+                      className={`
+                        w-full text-left rounded-lg border p-3 min-h-[48px] transition-all
+                        ${selected
+                          ? 'border-yellow-600 bg-yellow-900/20'
+                          : 'border-gray-700 bg-gray-800/50 active:bg-gray-700/70'
+                        }
+                        ${!selected && selectionFull ? 'opacity-40 cursor-not-allowed' : ''}
+                      `}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-white font-medium">{p.name}</span>
+                        {selected && (
+                          <span className="text-yellow-500 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-900/30">
+                            Suspect
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+
+              <p className="text-center text-xs text-gray-500 mb-3">
+                {suspectedWolves.size}/{MAX_IDENTIFICATIONS} identification{suspectedWolves.size > 1 ? 's' : ''}
+              </p>
 
               {suspectedWolves.size > 0 && (
                 <button
