@@ -1,4 +1,5 @@
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
+import { rankScoreboard } from '../../utils/scoreRanking.js';
 
 /**
  * Game end screen.
@@ -9,9 +10,10 @@ export default function GameEndScreen() {
 
   const wolvesWin = winner === 'wolves';
 
-  const myEntry = scoreboard?.find((p) => p.id === player?.id);
+  const rankedScoreboard = rankScoreboard(scoreboard || []);
+  const myEntry = rankedScoreboard.find((p) => p.id === player?.id);
   const myScore = myEntry?.score ?? player?.score ?? 0;
-  const myRank = myEntry ? scoreboard.indexOf(myEntry) + 1 : null;
+  const myRank = myEntry?.rank ?? null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
@@ -47,7 +49,7 @@ export default function GameEndScreen() {
         <p className="text-3xl font-bold text-white">{myScore}</p>
         {myRank && (
           <p className="text-gray-400 text-sm mt-2">
-            {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `${myRank}e`} sur {scoreboard.length}
+            {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `${myRank}e`} sur {rankedScoreboard.length}
           </p>
         )}
       </div>

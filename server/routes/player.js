@@ -4,6 +4,7 @@ import { getDb, getSetting } from '../db.js';
 import { requirePlayer } from '../middleware/session.js';
 import logger from '../logger.js';
 import { hasSpecialRole } from '../role-helpers.js';
+import { validateGhostIdentificationTargets } from '../scoring-rules.js';
 import {
   submitVote,
   submitGhostIdentifications,
@@ -327,6 +328,10 @@ router.post('/villager-guess', requirePlayer, (req, res) => {
     return res.status(400).json({ error: 'Les fantômes ne font pas de devinette villageois.' });
   }
 
+  if (player.role !== 'villager') {
+    return res.status(403).json({ error: 'Seuls les villageois peuvent utiliser la devinette villageois.' });
+  }
+
   try {
     const vote = submitVote(currentPhase.id, player.id, Number(targetId), 'villager_guess');
     logger.vote('Villager guess submitted', { phaseId: currentPhase.id, voterId: player.id, voterName: player.name, targetId: Number(targetId) });
@@ -347,10 +352,6 @@ router.post('/villager-guess', requirePlayer, (req, res) => {
 router.post('/ghost-identify', requirePlayer, (req, res) => {
   const { targetIds } = req.body;
   const player = req.player;
-
-  if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
-    return res.status(400).json({ error: 'targetIds (tableau) est requis.' });
-  }
 
   if (player.status !== 'ghost') {
     return res.status(400).json({ error: 'Seuls les fantômes peuvent identifier.' });
@@ -375,7 +376,12 @@ router.post('/ghost-identify', requirePlayer, (req, res) => {
 
   // Validate all targets exist and are alive
   const db = getDb();
-  const numericTargetIds = targetIds.map(Number);
+  let numericTargetIds;
+  try {
+    numericTargetIds = validateGhostIdentificationTargets(targetIds);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
   for (const tid of numericTargetIds) {
     const target = db.prepare('SELECT id, status FROM players WHERE id = ?').get(tid);
     if (!target) {

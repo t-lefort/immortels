@@ -5,6 +5,7 @@ import { getDb, getAllSettings, getSetting, setSetting, resetGame } from '../db.
 import logger from '../logger.js';
 import { hasSpecialRole, addSpecialRole, parseSpecialRoles } from '../role-helpers.js';
 import { recordScoreSnapshot, listScoreSnapshots } from '../score-snapshots.js';
+import { recordScoreEvent, listScoreEvents } from '../score-events.js';
 import { removeSpecialRole } from '../role-helpers.js';
 import {
   assignRoles,
@@ -927,7 +928,21 @@ router.post('/challenge', (req, res) => {
   }
 
   const db = getDb();
-  const playerIdsJson = JSON.stringify(winningPlayerIds || []);
+  if (winningPlayerIds !== undefined && !Array.isArray(winningPlayerIds)) {
+    return res.status(400).json({ error: 'winningPlayerIds doit être un tableau' });
+  }
+
+  const normalizedWinningPlayerIds = [...new Set((winningPlayerIds || []).map(Number))];
+  if (normalizedWinningPlayerIds.some(id => !Number.isInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont invalides' });
+  }
+
+  const getPlayer = db.prepare('SELECT id FROM players WHERE id = ?');
+  if (normalizedWinningPlayerIds.some(id => !getPlayer.get(id))) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont introuvables' });
+  }
+
+  const playerIdsJson = JSON.stringify(normalizedWinningPlayerIds);
 
   const result = db.prepare(
     'INSERT INTO challenges (name, special_role_awarded, winning_team_player_ids, after_phase_id) VALUES (?, ?, ?, ?)'
@@ -1096,8 +1111,8 @@ router.put('/player/:id', (req, res) => {
     const uniqueRoles = [...new Set(rolesArray)];
     updates.special_role = uniqueRoles.length > 0 ? uniqueRoles.join(',') : null;
   }
-  if (updates.score !== undefined && typeof updates.score !== 'number') {
-    return res.status(400).json({ error: 'Le score doit être un nombre' });
+  if (updates.score !== undefined && !Number.isInteger(updates.score)) {
+    return res.status(400).json({ error: 'Le score doit être un nombre entier' });
   }
   if (updates.name !== undefined) {
     if (typeof updates.name !== 'string' || !updates.name.trim()) {
@@ -1120,7 +1135,18 @@ router.put('/player/:id', (req, res) => {
   const setClauses = Object.keys(updates).map(f => `${f} = ?`).join(', ');
   const values = Object.values(updates);
 
-  db.prepare(`UPDATE players SET ${setClauses} WHERE id = ?`).run(...values, id);
+  db.transaction(() => {
+    db.prepare(`UPDATE players SET ${setClauses} WHERE id = ?`).run(...values, id);
+    if (updates.score !== undefined && updates.score !== player.score) {
+      recordScoreEvent({
+        playerId: id,
+        sourceType: 'admin',
+        reason: 'admin_score_override',
+        delta: updates.score - player.score,
+        metadata: { previousScore: player.score, newScore: updates.score },
+      }, db);
+    }
+  })();
 
   // Sync mayor_id game setting when special_role changes involving 'maire'
   if (updates.special_role !== undefined) {
@@ -1186,9 +1212,20 @@ router.post('/phase/undo', (req, res) => {
         scoreChangesCount: Array.isArray(scoreChanges) ? scoreChanges.length : 0,
       });
       const revertScore = db.prepare('UPDATE players SET score = score - ? WHERE id = ?');
-      for (const change of scoreChanges) {
-        revertScore.run(change.delta, change.playerId);
-      }
+      db.transaction(() => {
+        for (const change of scoreChanges) {
+          revertScore.run(change.delta, change.playerId);
+          recordScoreEvent({
+            playerId: change.playerId,
+            phaseId: phaseIdNum,
+            sourceType: 'phase_undo',
+            sourceId: phaseIdNum,
+            reason: 'phase_score_reverted',
+            delta: -change.delta,
+            metadata: { originalReason: change.reason || null },
+          }, db);
+        }
+      })();
       setSetting(`score_changes_phase_${phaseIdNum}`, null);
       logger.score('Phase scores reverted via undo', { phaseId: phaseIdNum, changes: scoreChanges.length });
     } catch (err) {
@@ -1381,6 +1418,14 @@ router.get('/score-snapshots', (req, res) => {
     ? Math.min(rawLimit, 500)
     : 100;
   res.json(listScoreSnapshots(limit));
+});
+
+router.get('/score-events', (req, res) => {
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0
+    ? Math.min(rawLimit, 1000)
+    : 300;
+  res.json(listScoreEvents(limit));
 });
 
 router.post('/game/end', (req, res) => {

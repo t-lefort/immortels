@@ -64,7 +64,7 @@ export default function NightVoteInfoPanel() {
             <span className="text-yellow-400 mt-0.5 flex-shrink-0">&#x1F50D;</span>
             <p className="text-gray-300">
               <span className="font-semibold text-yellow-400">Fantômes villageois :</span>{' '}
-              Vous pouvez aussi identifier les loups (+1 si correct, -1 si incorrect).
+              Vous pouvez aussi identifier jusqu'à deux loups (+2 si correct, -1 si incorrect).
             </p>
           </div>
         </div>

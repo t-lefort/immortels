@@ -117,6 +117,24 @@ function initSchema() {
       context_json TEXT NOT NULL DEFAULT '{}',
       scores_json  TEXT NOT NULL
     );
+
+    -- Individual score movements used by the admin audit trail
+    CREATE TABLE IF NOT EXISTS score_events (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id     INTEGER NOT NULL REFERENCES players(id),
+      phase_id      INTEGER REFERENCES phases(id),
+      source_type   TEXT NOT NULL,
+      source_id     TEXT,
+      reason        TEXT NOT NULL,
+      delta         INTEGER NOT NULL,
+      score_before  INTEGER NOT NULL,
+      score_after   INTEGER NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at    DATETIME NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_score_events_phase ON score_events(phase_id, id);
+    CREATE INDEX IF NOT EXISTS idx_score_events_player ON score_events(player_id, id);
   `);
 }
 
@@ -205,6 +223,7 @@ export function getAllSettings() {
 export function resetGame() {
   const database = getDb();
   database.exec(`
+    DELETE FROM score_events;
     DELETE FROM score_snapshots;
     DELETE FROM ghost_identifications;
     DELETE FROM phase_victims;

@@ -134,6 +134,11 @@ Tous les votes réels sont stockés, y compris les devinettes des villageois la 
 | awarded_to_player_id | INTEGER NULL | FK → players.id (joueur qui a reçu le rôle) |
 | timestamp | DATETIME | Quand l'épreuve a été enregistrée |
 
+### Tables d'audit des scores
+
+- `score_events` enregistre chaque gain ou perte avec le joueur, la phase/source, la raison, le delta et le score avant/après.
+- `score_snapshots` conserve une sauvegarde complète avant les mutations importantes pour faciliter la récupération.
+
 ---
 
 ## Rôles et pouvoirs
@@ -161,7 +166,7 @@ Quand un joueur est éliminé (par les loups, les fantômes ou le village), son 
 
 **Pouvoirs des fantômes :**
 1. **Vote d'élimination** : chaque nuit, chaque fantôme vote individuellement (sans se concerter) pour éliminer un joueur vivant. Majorité gagne, égalité = hasard.
-2. **Identification (fantômes villageois uniquement)** : chaque nuit, le fantôme villageois peut sélectionner autant de joueurs vivants qu'il veut comme "suspects loups". +1 point par loup correctement identifié, -1 par erreur.
+2. **Identification (fantômes villageois uniquement)** : chaque nuit, le fantôme villageois peut sélectionner jusqu'à 2 joueurs vivants comme "suspects loups". +2 points par loup correctement identifié, -1 par erreur.
 
 ---
 
@@ -262,11 +267,12 @@ Les scores sont calculés automatiquement par l'app à chaque fin de phase. **Le
 | Condition | Points | Quand c'est calculé |
 |-----------|--------|---------------------|
 | Villageois devine un villageois la nuit | +1 | Fin de nuit, si le joueur choisi est effectivement villageois |
-| Équipe gagne une épreuve | +1 | Quand l'admin entre le résultat de l'épreuve (uniquement joueurs vivants de l'équipe) |
-| Survivant final | +3 | Fin de la partie |
+| Équipe gagne une épreuve | +1 | Quand l'admin entre le résultat de l'épreuve (joueurs vivants ou fantômes de l'équipe) |
+| Membre de la faction gagnante | +2 | Fin de la partie, vivant ou fantôme |
+| Survivant de la faction gagnante | +1 supplémentaire | Fin de la partie |
 | Villageois vote contre un loup au conseil | +2 | Fin de chaque conseil, pour chaque villageois vivant ayant voté pour un loup (même si le loup n'est pas éliminé) |
-| Loup survit à un conseil du village | +1 | Fin de chaque conseil, pour chaque loup vivant non éliminé |
-| Fantôme villageois identifie un loup | +1 par loup sélectionné | Fin de chaque nuit |
+| Loup survit à un conseil du village | +2 | Fin de chaque conseil, pour chaque loup vivant non éliminé |
+| Fantôme villageois identifie un loup | +2 par loup sélectionné | Fin de chaque nuit, avec 2 identifications maximum |
 | Fantôme villageois se trompe | -1 par villageois sélectionné | Fin de chaque nuit |
 | Fantôme loup : villageois éliminé par les fantômes pour lequel il a voté | +3 | Fin de chaque nuit, si la victime fantôme est un villageois ET que le fantôme loup avait voté pour cette personne |
 | Chasseur tue un loup | +2 | Quand le chasseur utilise son pouvoir |
@@ -308,7 +314,7 @@ Les scores sont calculés automatiquement par l'app à chaque fin de phase. **Le
 
 #### Écran de vote — Nuit (fantôme)
 - **Vote d'élimination** : Liste des joueurs vivants, sélectionner un joueur à éliminer
-- **Identification (fantôme villageois uniquement)** : Cases à cocher sur chaque joueur vivant. Le fantôme coche ceux qu'il pense être des loups. Il peut en cocher 0, 1, ou autant qu'il veut.
+- **Identification (fantôme villageois uniquement)** : Cases à cocher sur chaque joueur vivant. Le fantôme peut choisir 1 ou 2 joueurs qu'il pense être des loups.
 - Bouton "Valider"
 
 #### Écran de vote — Conseil du village (joueur vivant)
@@ -359,6 +365,7 @@ Les scores sont calculés automatiquement par l'app à chaque fin de phase. **Le
 
 #### Historique
 - Consulter les votes détaillés de chaque phase passée (qui a voté pour qui)
+- Consulter chaque gain ou perte de points avec son explication et le score avant/après
 - Historique des actions admin (pour traçabilité)
 
 #### Gestion d'urgence — Contrôle total
@@ -465,7 +472,7 @@ L'admin doit pouvoir modifier n'importe quel aspect du jeu pour corriger des bug
 ### Fin de partie
 - La partie se termine quand l'admin le décide (normalement quand il reste 3 joueurs)
 - L'admin appuie sur "Fin de partie"
-- Les scores finaux sont calculés (+3 pour les survivants)
+- Les scores finaux sont calculés (+2 pour toute la faction gagnante, +1 supplémentaire pour ses survivants)
 - Le classement est affiché (sur le dashboard ou dans l'admin, au choix de Thomas)
 
 ---
