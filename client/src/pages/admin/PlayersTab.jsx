@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as api from '../../services/adminApi.js';
+import { useIncognito } from '../../hooks/useIncognito.js';
+import IncognitoToggle, { HiddenRole } from '../../components/IncognitoToggle.jsx';
 
 const ALL_SPECIAL_ROLES = [
   { value: 'maire', label: 'Maire' },
@@ -21,6 +23,20 @@ export default function PlayersTab({ players, refreshPlayers }) {
   const [editData, setEditData] = useState({});
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const { incognito, toggleIncognito } = useIncognito();
+  // Rows the admin explicitly revealed while incognito stays on
+  const [peeked, setPeeked] = useState(() => new Set());
+
+  function peek(id) {
+    setPeeked(prev => new Set(prev).add(id));
+  }
+
+  // Alive players first — they are the ones the admin acts on during a phase.
+  // Ties keep the original id order so rows don't jump around between renders.
+  const sortedPlayers = useMemo(() => {
+    const rank = (p) => (p.status === 'alive' ? 0 : 1);
+    return [...players].sort((a, b) => rank(a) - rank(b) || a.id - b.id);
+  }, [players]);
 
   function startEdit(player) {
     setEditingId(player.id);
@@ -78,6 +94,8 @@ export default function PlayersTab({ players, refreshPlayers }) {
 
   return (
     <div className="space-y-4">
+      <IncognitoToggle incognito={incognito} onToggle={toggleIncognito} />
+
       {message && (
         <div className={`px-4 py-2 rounded-lg text-sm ${
           message.type === 'success' ? 'bg-green-900/50 text-green-300 border border-green-800' :
@@ -103,7 +121,7 @@ export default function PlayersTab({ players, refreshPlayers }) {
             </tr>
           </thead>
           <tbody>
-            {players.map(p => (
+            {sortedPlayers.map(p => (
               <tr key={p.id} className={`border-b border-gray-800/50 ${
                 p.status === 'ghost' ? 'opacity-60' : ''
               }`}>
@@ -192,24 +210,36 @@ export default function PlayersTab({ players, refreshPlayers }) {
                     <td className="px-3 py-2 text-white font-medium">{p.name}</td>
                     <td className="px-3 py-2">
                       {p.role ? (
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${
-                          p.role === 'wolf' ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'
-                        }`}>
-                          {p.role === 'wolf' ? 'Loup' : 'Villageois'}
-                        </span>
+                        <HiddenRole
+                          incognito={incognito}
+                          peeked={peeked.has(p.id)}
+                          onPeek={() => peek(p.id)}
+                        >
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${
+                            p.role === 'wolf' ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'
+                          }`}>
+                            {p.role === 'wolf' ? 'Loup' : 'Villageois'}
+                          </span>
+                        </HiddenRole>
                       ) : (
                         <span className="text-gray-600">--</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {p.special_role ? (
-                        <div className="flex flex-wrap gap-1">
-                          {parseRoles(p.special_role).map(r => (
-                            <span key={r} className="px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300">
-                              {r}
-                            </span>
-                          ))}
-                        </div>
+                        <HiddenRole
+                          incognito={incognito}
+                          peeked={peeked.has(p.id)}
+                          onPeek={() => peek(p.id)}
+                        >
+                          <span className="flex flex-wrap gap-1">
+                            {parseRoles(p.special_role).map(r => (
+                              <span key={r} className="px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300">
+                                {r}
+                              </span>
+                            ))}
+                          </span>
+                        </HiddenRole>
                       ) : (
                         <span className="text-gray-600">--</span>
                       )}

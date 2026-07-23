@@ -47,9 +47,15 @@ function initSchema() {
     );
 
     -- Players
+    -- "name" is the DISPLAY name (built from first_name + last_name once an
+    -- account exists). "username" is the login pseudo — never displayed.
     CREATE TABLE IF NOT EXISTS players (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
       name               TEXT    NOT NULL UNIQUE,
+      username           TEXT    DEFAULT NULL,           -- login pseudo (unique, never shown)
+      password_hash      TEXT    DEFAULT NULL,           -- scrypt hash, NULL = account not claimed yet
+      first_name         TEXT    DEFAULT NULL,
+      last_name          TEXT    DEFAULT NULL,
       role               TEXT    DEFAULT NULL,           -- 'wolf' | 'villager' | NULL (before assignment)
       special_role       TEXT    DEFAULT NULL,           -- 'maire' | 'sorciere' | 'protecteur' | 'voyante' | 'chasseur' | 'immunite'
       status             TEXT    NOT NULL DEFAULT 'alive', -- 'alive' | 'ghost'
@@ -133,6 +139,15 @@ function initSchema() {
       created_at    DATETIME NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Finished games kept across resets so players can review them later
+    CREATE TABLE IF NOT EXISTS archived_games (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      label       TEXT NOT NULL,
+      winner      TEXT,
+      archived_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      data_json   TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_score_events_phase ON score_events(phase_id, id);
     CREATE INDEX IF NOT EXISTS idx_score_events_player ON score_events(player_id, id);
   `);
@@ -142,11 +157,32 @@ function initSchema() {
  * Run schema migrations for existing databases.
  */
 function runMigrations() {
-  // Add role_seen column if it doesn't exist (for existing DBs)
   const cols = db.prepare("PRAGMA table_info(players)").all();
-  if (!cols.some(c => c.name === 'role_seen')) {
+  const hasColumn = (name) => cols.some(c => c.name === name);
+
+  if (!hasColumn('role_seen')) {
     db.exec("ALTER TABLE players ADD COLUMN role_seen INTEGER NOT NULL DEFAULT 0");
   }
+
+  // Account columns (added with the pseudo/password login)
+  if (!hasColumn('username')) {
+    db.exec('ALTER TABLE players ADD COLUMN username TEXT DEFAULT NULL');
+  }
+  if (!hasColumn('password_hash')) {
+    db.exec('ALTER TABLE players ADD COLUMN password_hash TEXT DEFAULT NULL');
+  }
+  if (!hasColumn('first_name')) {
+    db.exec('ALTER TABLE players ADD COLUMN first_name TEXT DEFAULT NULL');
+  }
+  if (!hasColumn('last_name')) {
+    db.exec('ALTER TABLE players ADD COLUMN last_name TEXT DEFAULT NULL');
+  }
+
+  // Created here rather than in initSchema: on a pre-existing database the
+  // `username` column only exists once the ALTER TABLE above has run.
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username ON players(username) WHERE username IS NOT NULL'
+  );
 }
 
 /**
@@ -218,22 +254,34 @@ export function getAllSettings() {
 }
 
 /**
- * Reset the entire game: truncate all tables and re-insert default settings.
+ * Tables holding the current game. `archived_games` is deliberately absent:
+ * archives must survive a reset, that is their whole point.
+ */
+export const GAME_TABLES = [
+  'score_events',
+  'score_snapshots',
+  'ghost_identifications',
+  'phase_victims',
+  'votes',
+  'challenges',
+  'phases',
+  'players',
+];
+
+/**
+ * Reset the entire game: truncate all game tables and re-insert default
+ * settings. Archived games are preserved.
  */
 export function resetGame() {
   const database = getDb();
-  database.exec(`
-    DELETE FROM score_events;
-    DELETE FROM score_snapshots;
-    DELETE FROM ghost_identifications;
-    DELETE FROM phase_victims;
-    DELETE FROM votes;
-    DELETE FROM challenges;
-    DELETE FROM phases;
-    DELETE FROM players;
-    DELETE FROM game_settings;
-    DELETE FROM sqlite_sequence;
-  `);
+  database.transaction(() => {
+    for (const table of GAME_TABLES) {
+      database.prepare(`DELETE FROM ${table}`).run();
+    }
+    database.prepare('DELETE FROM game_settings').run();
+    // Keep the archived_games counter intact so archive IDs stay stable
+    database.prepare("DELETE FROM sqlite_sequence WHERE name != 'archived_games'").run();
+  })();
   initDefaultSettings();
 }
 

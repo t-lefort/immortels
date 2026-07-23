@@ -6,9 +6,19 @@ import logger from '../logger.js';
 import { hasSpecialRole } from '../role-helpers.js';
 import { validateGhostIdentificationTargets } from '../scoring-rules.js';
 import {
+  hashPassword,
+  verifyPassword,
+  normalizeUsername,
+  validateUsername,
+  validatePassword,
+  cleanNamePart,
+  buildDisplayName,
+} from '../auth-helpers.js';
+import {
   submitVote,
   submitGhostIdentifications,
   getCurrentPhase,
+  isVoteValid,
 } from '../game-engine.js';
 import {
   emitToAll,
@@ -50,86 +60,151 @@ router.get('/token-by-name', (req, res) => {
 });
 
 /**
- * POST /api/player/join { name }
- * Creates a new player or reconnects an existing one.
- * Sets a session_token cookie for subsequent requests.
+ * Issue a fresh session token for a player and set the session cookie.
  */
-router.post('/join', (req, res) => {
-  const { name } = req.body;
+function startSession(res, playerId) {
+  const token = uuidv4();
+  getDb().prepare('UPDATE players SET session_token = ? WHERE id = ?').run(token, playerId);
 
-  if (!name || typeof name !== 'string' || !name.trim()) {
-    return res.status(400).json({ error: 'Le prénom est requis.' });
+  res.cookie('session_token', token, {
+    httpOnly: false, // readable by JS for socket auth
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+
+  return token;
+}
+
+/**
+ * Broadcast the refreshed player list to admin and dashboard.
+ */
+function notifyLobby(req) {
+  const io = req.app.get('io');
+  if (!io) return;
+  const players = getDb().prepare('SELECT id, name FROM players ORDER BY id').all();
+  const lobbyData = { playerCount: players.length, players };
+  io.to('admin').emit('lobby:update', lobbyData);
+  io.to('dashboard').emit('lobby:update', lobbyData);
+}
+
+/**
+ * POST /api/player/register { username, password, firstName, lastName }
+ * Create a player account. The pseudo is only used to log in — everything
+ * displayed in the game uses "Prénom Nom".
+ *
+ * If the admin pre-registered a player with the same display name and no
+ * credentials yet, that row is claimed instead of creating a duplicate.
+ */
+router.post('/register', (req, res) => {
+  const { username, password, firstName, lastName } = req.body || {};
+
+  const usernameError = validateUsername(username);
+  if (usernameError) return res.status(400).json({ error: usernameError });
+
+  const passwordError = validatePassword(password);
+  if (passwordError) return res.status(400).json({ error: passwordError });
+
+  const cleanFirst = cleanNamePart(firstName);
+  const cleanLast = cleanNamePart(lastName);
+  if (!cleanFirst) return res.status(400).json({ error: 'Le prénom est requis.' });
+  if (!cleanLast) return res.status(400).json({ error: 'Le nom est requis.' });
+
+  const displayName = buildDisplayName(cleanFirst, cleanLast);
+  if (displayName.length > 50) {
+    return res.status(400).json({ error: 'Le nom complet ne peut pas dépasser 50 caractères.' });
   }
 
-  const cleanName = name.trim();
-
-  if (cleanName.length > 50) {
-    return res.status(400).json({ error: 'Le prénom ne peut pas dépasser 50 caractères.' });
-  }
-
-  if (cleanName.length < 1) {
-    return res.status(400).json({ error: 'Le prénom est requis.' });
-  }
-
+  const normalizedUsername = normalizeUsername(username);
   const db = getDb();
 
-  // Check if player already exists (reconnection case)
-  const existing = db.prepare('SELECT * FROM players WHERE name = ?').get(cleanName);
+  const usernameTaken = db
+    .prepare('SELECT id FROM players WHERE username = ?')
+    .get(normalizedUsername);
+  if (usernameTaken) {
+    return res.status(409).json({ error: 'Ce pseudo est déjà utilisé.' });
+  }
 
-  if (existing) {
-    // Reconnect: generate a fresh session token
-    const token = uuidv4();
-    db.prepare('UPDATE players SET session_token = ? WHERE id = ?').run(token, existing.id);
+  // A row the admin created via bulk-add: same display name, no account yet.
+  const claimable = db
+    .prepare('SELECT * FROM players WHERE name = ? AND username IS NULL')
+    .get(displayName);
 
-    res.cookie('session_token', token, {
-      httpOnly: false, // readable by JS for socket auth
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+  const passwordHash = hashPassword(password);
 
-    logger.auth('Player reconnected', { playerId: existing.id, name: existing.name });
-    return res.json({
-      id: existing.id,
-      name: existing.name,
-      reconnected: true,
+  if (claimable) {
+    db.prepare(
+      'UPDATE players SET username = ?, password_hash = ?, first_name = ?, last_name = ? WHERE id = ?'
+    ).run(normalizedUsername, passwordHash, cleanFirst, cleanLast, claimable.id);
+
+    startSession(res, claimable.id);
+    logger.auth('Account claimed', { playerId: claimable.id, username: normalizedUsername });
+    return res.json({ id: claimable.id, name: displayName, claimed: true });
+  }
+
+  const nameTaken = db.prepare('SELECT id FROM players WHERE name = ?').get(displayName);
+  if (nameTaken) {
+    return res.status(409).json({
+      error: 'Un joueur porte déjà ce prénom et ce nom. Contactez l\'administrateur.',
     });
   }
 
-  // New player — only allowed during setup
-  const gameStatus = getSetting('game_status');
-  if (gameStatus !== 'setup') {
+  // Brand new player — only allowed while the game is being set up
+  if (getSetting('game_status') !== 'setup') {
     return res.status(403).json({
       error: 'La partie est déjà en cours. Contactez l\'administrateur.',
     });
   }
 
-  const token = uuidv4();
+  const result = db.prepare(
+    'INSERT INTO players (name, username, password_hash, first_name, last_name) VALUES (?, ?, ?, ?, ?)'
+  ).run(displayName, normalizedUsername, passwordHash, cleanFirst, cleanLast);
 
-  const result = db
-    .prepare('INSERT INTO players (name, session_token) VALUES (?, ?)')
-    .run(cleanName, token);
+  const playerId = Number(result.lastInsertRowid);
+  startSession(res, playerId);
+  notifyLobby(req);
 
-  res.cookie('session_token', token, {
-    httpOnly: false, // readable by JS for socket auth
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  logger.auth('Account created', { playerId, username: normalizedUsername });
+  res.status(201).json({ id: playerId, name: displayName, claimed: false });
+});
 
-  // Notify lobby update to admin and dashboard
-  const io = req.app.get('io');
-  if (io) {
-    const players = db.prepare('SELECT id, name FROM players ORDER BY id').all();
-    const lobbyData = { playerCount: players.length, players };
-    io.to('admin').emit('lobby:update', lobbyData);
-    io.to('dashboard').emit('lobby:update', lobbyData);
+/**
+ * POST /api/player/login { username, password }
+ *
+ * Accounts pre-created by the admin have no password yet: the first login
+ * sets the one the player typed. Once a password exists it is enforced.
+ */
+router.post('/login', (req, res) => {
+  const { username, password } = req.body || {};
+
+  const normalizedUsername = normalizeUsername(username);
+  if (!normalizedUsername || typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Pseudo et mot de passe requis.' });
   }
 
-  logger.auth('New player joined', { playerId: result.lastInsertRowid, name: cleanName });
-  res.status(201).json({
-    id: result.lastInsertRowid,
-    name: cleanName,
-    reconnected: false,
-  });
+  const db = getDb();
+  const player = db
+    .prepare('SELECT * FROM players WHERE username = ?')
+    .get(normalizedUsername);
+
+  // Same message for unknown pseudo and wrong password: no account enumeration.
+  const rejection = { error: 'Pseudo ou mot de passe incorrect.' };
+  if (!player) return res.status(401).json(rejection);
+
+  let firstLogin = false;
+  if (!player.password_hash) {
+    const passwordError = validatePassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    db.prepare('UPDATE players SET password_hash = ? WHERE id = ?')
+      .run(hashPassword(password), player.id);
+    firstLogin = true;
+  } else if (!verifyPassword(password, player.password_hash)) {
+    return res.status(401).json(rejection);
+  }
+
+  startSession(res, player.id);
+  logger.auth('Player logged in', { playerId: player.id, username: normalizedUsername, firstLogin });
+
+  res.json({ id: player.id, name: player.name, firstLogin });
 });
 
 /**
@@ -240,10 +315,9 @@ router.post('/vote', requirePlayer, (req, res) => {
       }
     } else if (player.role === 'wolf') {
       voteType = 'wolf';
-      // Wolf can't vote for wolf
-      if (target.role === 'wolf') {
-        return res.status(400).json({ error: 'Vous ne pouvez pas voter pour un autre loup.' });
-      }
+      // A wolf voting for a wolf is accepted and stored, but flagged invalid
+      // further down. Rejecting it here would give the game away: the error
+      // itself would only ever be seen by a wolf.
       // Wolf must be alive to vote
       if (player.status !== 'alive') {
         return res.status(400).json({ error: 'Les loups fantômes ne votent pas comme loups.' });
@@ -270,8 +344,9 @@ router.post('/vote', requirePlayer, (req, res) => {
   }
 
   try {
-    const vote = submitVote(currentPhase.id, player.id, Number(targetId), voteType);
-    logger.vote('Vote submitted', { phaseId: currentPhase.id, voterId: player.id, voterName: player.name, targetId: Number(targetId), voteType, updated: !!vote.updated });
+    const valid = isVoteValid(voteType, player, target);
+    const vote = submitVote(currentPhase.id, player.id, Number(targetId), voteType, valid);
+    logger.vote('Vote submitted', { phaseId: currentPhase.id, voterId: player.id, voterName: player.name, targetId: Number(targetId), voteType, valid, updated: !!vote.updated });
 
     // Emit vote update with counts
     emitVoteUpdate(req.app.get('io'), currentPhase);

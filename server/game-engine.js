@@ -165,30 +165,46 @@ export function getCurrentPhase() {
 // ─── Votes ──────────────────────────────────────────────────────────────────
 
 /**
+ * Decide whether a vote counts towards the tally.
+ *
+ * A wolf voting for another wolf is recorded but not counted. Every player
+ * sees the exact same target list at night (see the night vote screens), so
+ * nobody can deduce a role by counting the names on someone's phone — the
+ * price is that a wolf who misremembers their pack wastes their vote.
+ */
+export function isVoteValid(voteType, voter, target) {
+  if (voteType === 'wolf' && voter?.role === 'wolf' && target?.role === 'wolf') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Submit a vote. Deduplicates: one vote per (phase, voter, voteType).
  * If the player already voted, updates their existing vote (upsert).
  * Returns { vote, updated } where updated=true if an existing vote was changed.
  */
-export function submitVote(phaseId, voterId, targetId, voteType) {
+export function submitVote(phaseId, voterId, targetId, voteType, isValid = true) {
   const db = getDb();
+  const validFlag = isValid ? 1 : 0;
 
   const existing = db.prepare(
     'SELECT id, target_id FROM votes WHERE phase_id = ? AND voter_id = ? AND vote_type = ?'
   ).get(phaseId, voterId, voteType);
 
   if (existing) {
-    // Upsert: update the existing vote with the new target
+    // Upsert: update the existing vote with the new target and validity
     db.prepare(
-      'UPDATE votes SET target_id = ? WHERE id = ?'
-    ).run(targetId, existing.id);
+      'UPDATE votes SET target_id = ?, is_valid = ? WHERE id = ?'
+    ).run(targetId, validFlag, existing.id);
 
     const updated = db.prepare('SELECT * FROM votes WHERE id = ?').get(existing.id);
     return { ...updated, updated: true };
   }
 
   const result = db.prepare(
-    'INSERT INTO votes (phase_id, voter_id, target_id, vote_type, is_valid) VALUES (?, ?, ?, ?, 1)'
-  ).run(phaseId, voterId, targetId, voteType);
+    'INSERT INTO votes (phase_id, voter_id, target_id, vote_type, is_valid) VALUES (?, ?, ?, ?, ?)'
+  ).run(phaseId, voterId, targetId, voteType, validFlag);
 
   const vote = db.prepare('SELECT * FROM votes WHERE id = ?').get(result.lastInsertRowid);
   return { ...vote, updated: false };
