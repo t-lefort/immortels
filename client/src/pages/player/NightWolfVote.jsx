@@ -3,7 +3,6 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
 import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
-import RoleSheet from '../../components/RoleSheet.jsx';
 
 /**
  * Wolf vote during night phase.
@@ -28,7 +27,7 @@ export default function NightWolfVote() {
   // Filtering out the pack here would make a wolf's list shorter than a
   // villager's, and counting the names on a screenshot would give the role
   // away. A vote cast on a fellow wolf is recorded but not counted, so the
-  // wolf has to remember their pack — "Ma carte" is there for that.
+  // wolf has to remember the pack they were shown at the reveal.
   const votableTargets = players.filter(
     (p) => p.status === 'alive' && p.id !== player?.id
   );
@@ -75,11 +74,6 @@ export default function NightWolfVote() {
 
       {/* Night vote info panel */}
       <NightVoteInfoPanel />
-
-      {/* Role sheet — identical entry point for every role */}
-      <div className="mb-4">
-        <RoleSheet />
-      </div>
 
       {/* Already voted state */}
       {alreadyVoted ? (

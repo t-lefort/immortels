@@ -16,7 +16,8 @@ const sections = [
           Au début de la partie, chaque joueur reçoit secrètement un rôle :
           <strong className="text-red-400"> Loup</strong> ou
           <strong className="text-blue-400"> Villageois</strong>.
-          Vous pouvez le consulter à tout moment via <strong>« Ma carte »</strong>.
+          Il n'est affiché <strong>qu'une seule fois</strong>, au lancement —
+          retenez-le bien.
         </p>
         <p>
           Le jeu alterne entre des <strong>phases de nuit</strong> et des
@@ -28,31 +29,30 @@ const sections = [
   },
   {
     id: 'ma-carte',
-    title: 'Ma carte — et pourquoi une capture d\'écran ne prouve pas l\'innocence',
+    title: 'La révélation du rôle — et pourquoi une capture ne prouve rien',
     color: 'text-amber-400',
     borderColor: 'border-amber-900/40',
     content: (
       <>
         <p className="mb-3">
-          Le bouton <strong>« Ma carte »</strong> affiche votre rôle tant que vous
-          gardez le doigt appuyé. Dès que vous relâchez, la carte disparaît.
+          Au lancement, votre rôle s'affiche tant que vous gardez le doigt appuyé
+          sur le cadre. Dès que vous relâchez, la carte disparaît. Une fois que
+          vous validez, <strong>cet écran ne revient jamais</strong> : retenez
+          votre rôle, et votre meute si vous êtes loup.
         </p>
         <p className="mb-3">
-          <strong className="text-amber-400">Le point important :</strong> n'importe qui
-          peut y afficher une carte <strong>Villageois</strong>, qu'il le soit ou non.
-          Un loup montre exactement le même écran qu'un villageois. Rien ne les
-          distingue.
-        </p>
-        <p className="mb-3">
-          Seule la carte Villageois est truquable — personne n'a jamais intérêt à
-          se faire passer pour un loup.
+          <strong className="text-amber-400">Le point important :</strong> à ce
+          moment-là, n'importe qui peut afficher une carte <strong>Villageois</strong>,
+          qu'il le soit ou non. Un loup voit exactement le même écran qu'un
+          villageois. Rien ne les distingue.
         </p>
         <p className="mb-3">
           C'est volontaire. Aucune application web ne peut empêcher une capture
           d'écran — et même si elle le pouvait, il suffirait de photographier
           l'écran avec un autre téléphone. Plutôt que d'essayer d'empêcher la
-          capture, on la rend <strong>sans valeur</strong> : puisque n'importe qui
-          peut produire une carte Villageois, en montrer une ne prouve plus rien.
+          capture, on la rend <strong>sans valeur</strong> : puisque tout le monde
+          a pu enregistrer une carte Villageois au lancement, en exhiber une ne
+          prouve plus rien.
         </p>
         <p className="text-gray-400 text-sm">
           Autrement dit : ne perdez pas votre temps à réclamer une capture, et
@@ -73,7 +73,7 @@ const sections = [
           <ul className="text-gray-300 space-y-1 text-sm">
             <li>- Vote chaque nuit pour éliminer un villageois</li>
             <li>- Peut communiquer discrètement avec les autres loups entre les phases de jeu</li>
-            <li>- Connaît l'identité des autres loups lors de la révélation du rôle, et peut la revoir à tout moment via « Ma carte »</li>
+            <li>- Découvre l'identité des autres loups lors de la révélation du rôle, affichée une seule fois. Retenez bien qui sont vos alliés, ou allez discrètement redemander au maître du jeu.</li>
           </ul>
         </div>
         <div className="bg-blue-900/20 border border-blue-900/40 rounded-lg p-4">
@@ -116,7 +116,7 @@ const sections = [
           tous les joueurs vivants sauf soi-même. Impossible de deviner un rôle en
           regardant l'écran du voisin. En contrepartie, un loup qui vote pour un
           autre loup perd son vote — il n'est pas comptabilisé, et rien ne vous
-          prévient. À vous de retenir votre meute (« Ma carte » vous la rappelle).
+          prévient. À vous d'avoir retenu votre meute.
         </p>
         <p className="text-gray-400 text-sm">
           Le vote est définitif — pas de retour en arrière après confirmation.

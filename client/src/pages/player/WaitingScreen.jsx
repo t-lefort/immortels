@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
-import RoleSheet from '../../components/RoleSheet.jsx';
 
 
 // Map special_role keys to French display labels (excluding maire)
@@ -69,11 +68,6 @@ export default function WaitingScreen() {
           <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
         <p className="text-gray-400">En attente de la prochaine phase...</p>
-      </div>
-
-      {/* Role sheet */}
-      <div className="mb-6">
-        <RoleSheet />
       </div>
 
       {/* Game stats */}

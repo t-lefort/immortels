@@ -3,7 +3,6 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
 import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
-import RoleSheet from '../../components/RoleSheet.jsx';
 
 /**
  * Villager guess during night phase.
@@ -71,11 +70,6 @@ export default function NightVillagerGuess() {
 
       {/* Night vote info panel */}
       <NightVoteInfoPanel />
-
-      {/* Role sheet — identical entry point for every role */}
-      <div className="mb-4">
-        <RoleSheet />
-      </div>
 
       {/* Already guessed state */}
       {alreadyGuessed ? (

@@ -1,26 +1,56 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
-import { RoleCard, Watermark } from '../../components/RoleSheet.jsx';
+import { RoleCard, Watermark } from '../../components/RoleCard.jsx';
 
 /**
- * One-time role reveal at the start of the game.
+ * The one and only time a player sees their role.
  *
- * The role is only shown while the player holds their finger down, and the
- * same card can later be re-opened — and faked — from "Ma carte". See
- * RoleSheet.jsx for why making the screenshot worthless beats trying to
- * prevent it.
+ * Shown once at game start and never again — dismissing it is permanent
+ * (tracked server-side via players.role_seen). Wolves have to memorise their
+ * pack here, because the night vote list deliberately gives them no hint:
+ * marking the pack there would make a wolf's screen differ from a villager's.
  *
- * "J'ai compris" dismisses the screen permanently (tracked server-side via
- * players.role_seen).
+ * The card is only rendered while a finger is held down, and it can be shown
+ * as a Villageois card whatever the real role is. A screenshot cannot be
+ * prevented — no browser API can, and a second phone photographing the screen
+ * defeats anything done client-side — so the capture is made worthless
+ * instead: since anyone could have captured a Villageois card at this very
+ * moment, producing one later proves nothing.
+ *
+ * Two details make the bluff undetectable:
+ *  - the real/fake selector is hidden while the card is held, so a capture
+ *    never shows which mode produced it;
+ *  - the choice is never persisted nor sent to the server.
+ *
+ * Only the villager card is fakeable. A fake wolf card would need an invented
+ * pack, and an early screenshot would freeze those names while the village
+ * keeps learning roles — the day one of them is publicly cleared, that old
+ * capture would prove its holder was never a wolf.
  */
+
+const MODES = [
+  { value: 'real', label: 'Mon rôle' },
+  { value: 'villager', label: 'Villageois' },
+];
+
 export default function RoleRevealScreen() {
   const { player, roleRevealed, wolves, markRoleSeen } = usePlayer();
   const [dismissed, setDismissed] = useState(false);
+  const [mode, setMode] = useState('real');
   const [holding, setHolding] = useState(false);
-  const [hasLooked, setHasLooked] = useState(false);
+  // Only a look at the REAL card counts: someone who peeked at the fake one
+  // and dismissed would never learn their own role.
+  const [sawRealRole, setSawRealRole] = useState(false);
 
-  const role = roleRevealed || player?.role;
-  const isWolf = role === 'wolf';
+  const realRole = roleRevealed || player?.role;
+  const displayedRole = mode === 'real' ? realRole : 'villager';
+  const isWolf = displayedRole === 'wolf';
+
+  // 'villager' is the only fake mode, so a wolf card is always genuine and
+  // always carries the real pack.
+  const pack = isWolf
+    ? wolves.filter(w => w.id !== player?.id).map(w => w.name)
+    : [];
 
   // Already seen (from DB)
   useEffect(() => {
@@ -29,7 +59,8 @@ export default function RoleRevealScreen() {
     }
   }, [player?.role_seen]);
 
-  // Drop the card when the tab is backgrounded
+  // Drop the card when the tab is backgrounded — that is when the OS
+  // screenshot UI usually takes over.
   useEffect(() => {
     function hide() {
       setHolding(false);
@@ -51,7 +82,7 @@ export default function RoleRevealScreen() {
 
   function startHolding() {
     setHolding(true);
-    setHasLooked(true);
+    if (mode === 'real') setSawRealRole(true);
   }
 
   if (dismissed) {
@@ -63,7 +94,7 @@ export default function RoleRevealScreen() {
       <RoleCard
         isWolf={isWolf}
         playerName={player?.name}
-        pack={isWolf ? wolves.filter(w => w.id !== player?.id).map(w => w.name) : []}
+        pack={pack}
         onRelease={() => setHolding(false)}
       />
     );
@@ -71,12 +102,12 @@ export default function RoleRevealScreen() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden px-6"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden px-6 py-8"
       style={{ backgroundColor: '#0d0d0d' }}
     >
       <Watermark playerName={player?.name} />
 
-      <div className="relative z-10 w-full max-w-xs flex flex-col items-center gap-8">
+      <div className="relative z-10 w-full max-w-xs flex flex-col items-center gap-6">
         <div className="text-center">
           <p className="text-gray-400 text-sm uppercase tracking-widest mb-3">
             Votre rôle
@@ -100,17 +131,40 @@ export default function RoleRevealScreen() {
           Maintenir appuyé
         </button>
 
+        <div className="w-full">
+          <p className="text-gray-500 text-xs text-center mb-2">Carte affichée</p>
+          <div className="flex gap-1.5">
+            {MODES.map(m => (
+              <button
+                key={m.value}
+                onClick={() => setMode(m.value)}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  mode === m.value
+                    ? 'bg-gray-700 text-white border border-gray-500'
+                    : 'bg-gray-900 text-gray-500 border border-gray-800'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-gray-600 text-[11px] text-center mt-3 leading-relaxed">
+            Tout le monde peut afficher une carte Villageois, qu'il le soit ou
+            non : une capture d'écran ne prouve donc rien.
+          </p>
+        </div>
+
         <div className="text-center">
-          <p className="text-gray-600 text-[11px] leading-relaxed mb-6">
-            Vous pourrez la revoir à tout moment via « Ma carte ». Chacun peut
-            y afficher la carte de son choix : une capture d'écran ne prouve rien.
+          <p className="text-amber-500/60 text-[11px] leading-relaxed mb-4">
+            Cet écran ne s'affichera qu'une seule fois. Retenez bien votre rôle
+            {realRole === 'wolf' ? ' et votre meute' : ''}.
           </p>
 
           <button
             onClick={handleDismiss}
-            disabled={!hasLooked}
+            disabled={!sawRealRole}
             className={`px-8 py-4 rounded-xl font-bold text-lg min-h-[56px] transition-colors ${
-              hasLooked
+              sawRealRole
                 ? 'bg-gray-700 text-white active:bg-gray-600'
                 : 'bg-gray-900 text-gray-700 cursor-not-allowed'
             }`}
