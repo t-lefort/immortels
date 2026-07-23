@@ -3,15 +3,18 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
 import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
+import RoleSheet from '../../components/RoleSheet.jsx';
 
 /**
  * Wolf vote during night phase.
- * List of alive villagers (not wolves) to vote for.
- * Selection + confirmation dialog. Shows shared vote counter X/Y.
+ *
+ * IMPORTANT: this screen must stay pixel-identical to NightVillagerGuess —
+ * same targets, same wording, same layout. Any difference between the two
+ * lets a bystander (or a screenshot) identify the voter's role.
  */
 export default function NightWolfVote() {
   const {
-    players, wolves, vote, hasVoted,
+    player, players, vote, hasVoted,
     voteCount, totalExpected,
   } = usePlayer();
   const [selected, setSelected] = useState(null);
@@ -20,11 +23,14 @@ export default function NightWolfVote() {
   const [error, setError] = useState(null);
 
   const alreadyVoted = hasVoted.wolf;
-  const wolfIds = new Set(wolves.map((w) => w.id));
 
-  // Wolves vote for alive non-wolf players
+  // Exactly the same list a villager sees: every alive player except oneself.
+  // Filtering out the pack here would make a wolf's list shorter than a
+  // villager's, and counting the names on a screenshot would give the role
+  // away. A vote cast on a fellow wolf is recorded but not counted, so the
+  // wolf has to remember their pack — "Ma carte" is there for that.
   const votableTargets = players.filter(
-    (p) => p.status === 'alive' && !wolfIds.has(p.id)
+    (p) => p.status === 'alive' && p.id !== player?.id
   );
 
   async function handleConfirm() {
@@ -69,6 +75,11 @@ export default function NightWolfVote() {
 
       {/* Night vote info panel */}
       <NightVoteInfoPanel />
+
+      {/* Role sheet — identical entry point for every role */}
+      <div className="mb-4">
+        <RoleSheet />
+      </div>
 
       {/* Already voted state */}
       {alreadyVoted ? (

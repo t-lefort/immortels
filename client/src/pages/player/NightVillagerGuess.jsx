@@ -3,13 +3,14 @@ import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
 import NightVoteInfoPanel from '../../components/NightVoteInfoPanel.jsx';
+import RoleSheet from '../../components/RoleSheet.jsx';
 
 /**
  * Villager guess during night phase.
- * List of alive players (excluding self) to guess.
- * "Choisissez un joueur que vous pensez être villageois"
- * Same UX as wolf vote with selection + confirmation.
- * Shows shared vote counter X/Y.
+ *
+ * IMPORTANT: this screen must stay pixel-identical to NightWolfVote — same
+ * targets, same wording, same layout. Any difference between the two lets a
+ * bystander (or a screenshot) identify the voter's role.
  */
 export default function NightVillagerGuess() {
   const {
@@ -70,6 +71,11 @@ export default function NightVillagerGuess() {
 
       {/* Night vote info panel */}
       <NightVoteInfoPanel />
+
+      {/* Role sheet — identical entry point for every role */}
+      <div className="mb-4">
+        <RoleSheet />
+      </div>
 
       {/* Already guessed state */}
       {alreadyGuessed ? (

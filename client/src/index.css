@@ -338,6 +338,14 @@ html {
   100% { transform: translateX(5%) translateY(0); opacity: 0.2; }
 }
 
+/* watermark-slide — drifting name watermark over any screen showing a role.
+   Global rather than scoped to one component: both the initial reveal and the
+   "Ma carte" sheet use it. */
+@keyframes watermark-slide {
+  0% { transform: translateX(0) rotate(-15deg); }
+  100% { transform: translateX(-40px) rotate(-15deg); }
+}
+
 .animate-cardAppear {
   animation: cardAppear 0.5s ease-out forwards;
 }

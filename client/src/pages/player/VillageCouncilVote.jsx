@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext.jsx';
 import PlayerCard from '../../components/PlayerCard.jsx';
 import VoteConfirmation from '../../components/VoteConfirmation.jsx';
+import RoleSheet from '../../components/RoleSheet.jsx';
 
 /**
  * Village council vote screen.
@@ -64,6 +65,11 @@ export default function VillageCouncilVote() {
           <span className="text-gray-400 text-lg">{totalExpected}</span>
           <span className="text-gray-600 text-sm ml-2">votes</span>
         </div>
+      </div>
+
+      {/* Role sheet */}
+      <div className="mb-4">
+        <RoleSheet />
       </div>
 
       {/* Already voted state */}
