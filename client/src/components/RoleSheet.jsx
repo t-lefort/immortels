@@ -90,7 +90,7 @@ function RoleSheetModal({ onClose }) {
   const showPack = mode === 'real' && player?.role === 'wolf' && wolves.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col">
       {/* Held state: nothing but the card. No selector, no chrome — a capture
           taken now cannot reveal whether it is the real role or not. */}
       {holding ? (
@@ -171,7 +171,9 @@ export function RoleCard({ isWolf, playerName, pack = [], onRelease }) {
       onPointerLeave={onRelease}
       onPointerCancel={onRelease}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden select-none touch-none"
+      // z-[60] keeps the card above the screen it was opened from — the
+      // waiting screen's connection pill would otherwise paint on top of it.
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center overflow-hidden select-none touch-none"
       style={{ backgroundColor: isWolf ? '#1a0000' : '#0a0a2e' }}
     >
       <Watermark playerName={playerName} />
@@ -236,7 +238,9 @@ export function Watermark({ playerName }) {
             animationDelay: `${i * 0.3}s`,
           }}
         >
-          {Array(8).fill(`${playerName || ''} `).join('  ')}
+          {/* Repeated well past the viewport width so the band still spans a
+              wide screen even with a short name */}
+          {Array(24).fill(`${playerName || ''} `).join('  ')}
         </div>
       ))}
     </div>
