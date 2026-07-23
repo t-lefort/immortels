@@ -82,6 +82,15 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
     }
   }, [currentPhase, loadResults, loadVoteDetails]);
 
+  // While voting is open, keep the pending-votes panel current without the
+  // admin having to hit Rafraîchir after every incoming vote.
+  useEffect(() => {
+    if (!currentPhase || currentPhase.status !== 'voting') return;
+    const phaseId = currentPhase.id;
+    const interval = setInterval(() => loadVoteDetails(phaseId), 3000);
+    return () => clearInterval(interval);
+  }, [currentPhase, loadVoteDetails]);
+
   async function handleCreatePhase(type) {
     setLoading('create');
     setResults(null);
@@ -390,6 +399,16 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
         </div>
       )}
 
+      {/* Who still has something to submit */}
+      {currentPhase && currentPhase.status === 'voting' && (
+        <PendingVotesPanel
+          players={players}
+          currentPhase={currentPhase}
+          voteDetails={voteDetails}
+          onRefresh={handleRefreshVotes}
+        />
+      )}
+
       {/* Special Roles Panel */}
       {currentPhase && (
         <SpecialRolesPanel players={players} currentPhase={currentPhase} />
@@ -478,6 +497,115 @@ export default function PhaseControlTab({ players, refreshPlayers, gameStatus, c
           loading={loading}
           onReveal={handleReveal}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Lists everyone who still owes the current phase an action, so the admin can
+ * chase them by name instead of staring at an "18/29" counter.
+ *
+ * A villager ghost owes two separate things at night — the elimination vote
+ * and the wolf identification — and they are tracked independently.
+ */
+function PendingVotesPanel({ players, currentPhase, voteDetails, onRefresh }) {
+  const isNight = currentPhase.type === 'night';
+
+  const votedByType = {};
+  for (const vote of voteDetails?.details || []) {
+    if (!votedByType[vote.vote_type]) votedByType[vote.vote_type] = new Set();
+    votedByType[vote.vote_type].add(vote.voter_id);
+  }
+  const identifiedGhostIds = new Set(
+    (voteDetails?.ghostIdentifications || []).map(gi => gi.ghost_id)
+  );
+
+  const hasVoted = (type, playerId) => votedByType[type]?.has(playerId) === true;
+
+  // Each entry: { player, missing: [labels] }
+  const pending = [];
+  let totalExpected = 0;
+
+  if (isNight) {
+    for (const p of players) {
+      const missing = [];
+
+      if (p.status === 'alive') {
+        totalExpected++;
+        // A player's vote type follows their role, but the admin panel is the
+        // one place where showing that is fine — they already know the cast.
+        const type = p.role === 'wolf' ? 'wolf' : 'villager_guess';
+        if (!hasVoted(type, p.id)) missing.push('vote de nuit');
+      } else {
+        totalExpected++;
+        if (!hasVoted('ghost_eliminate', p.id)) missing.push('vote éliminer');
+        if (p.role === 'villager') {
+          totalExpected++;
+          if (!identifiedGhostIds.has(p.id)) missing.push('identification des loups');
+        }
+      }
+
+      if (missing.length > 0) pending.push({ player: p, missing });
+    }
+  } else {
+    for (const p of players) {
+      if (p.status !== 'alive') continue;
+      totalExpected++;
+      if (!hasVoted('village', p.id)) {
+        pending.push({ player: p, missing: ['vote du conseil'] });
+      }
+    }
+  }
+
+  const missingCount = pending.reduce((sum, entry) => sum + entry.missing.length, 0);
+  const doneCount = totalExpected - missingCount;
+
+  return (
+    <div className={`bg-gray-900 rounded-lg p-4 border ${
+      missingCount === 0 ? 'border-green-900/50' : 'border-orange-900/50'
+    }`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-lg font-semibold">
+            Votes en attente{' '}
+            <span className={missingCount === 0 ? 'text-green-400' : 'text-orange-400'}>
+              ({doneCount}/{totalExpected})
+            </span>
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {isNight
+              ? 'Les fantômes villageois doivent voter ET identifier.'
+              : 'Tous les joueurs vivants doivent voter.'}
+          </p>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 border border-gray-700 whitespace-nowrap"
+        >
+          Rafraîchir
+        </button>
+      </div>
+
+      {pending.length === 0 ? (
+        <p className="text-green-400 text-sm">Tout le monde a terminé.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {pending.map(({ player, missing }) => (
+            <div
+              key={player.id}
+              className="px-2.5 py-1.5 rounded-lg bg-orange-950/40 border border-orange-900/50"
+            >
+              <div className="text-sm text-white font-medium">
+                {player.name}
+                {player.status === 'ghost' && <span className="ml-1 text-emerald-400">👻</span>}
+              </div>
+              <div className="text-[11px] text-orange-300/80">
+                {missing.join(' · ')}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

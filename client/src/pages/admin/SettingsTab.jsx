@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as api from '../../services/adminApi.js';
 
 export default function SettingsTab({ refreshPlayers }) {
@@ -215,11 +215,18 @@ export default function SettingsTab({ refreshPlayers }) {
         </div>
       </div>
 
+      {/* Backup / Restore */}
+      <BackupPanel onNotify={setMessage} refreshPlayers={refreshPlayers} reloadSettings={loadSettings} />
+
+      {/* Archived games */}
+      <ArchivesPanel onNotify={setMessage} />
+
       {/* Danger Zone — Reset */}
       <div className="bg-red-950/30 rounded-lg p-4 border border-red-900/50">
         <h2 className="text-lg font-semibold text-red-400 mb-2">Zone dangereuse</h2>
         <p className="text-sm text-gray-400 mb-3">
           Reinitialiser supprime tous les joueurs, phases, votes et scores. Cette action est irreversible.
+          Une partie terminee est automatiquement archivee avant d'etre effacee.
         </p>
         <button
           onClick={handleReset}
@@ -231,4 +238,214 @@ export default function SettingsTab({ refreshPlayers }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Export the whole game to a JSON file, and restore one back.
+ *
+ * Import is destructive by design (that is the point: recovering a game after
+ * a mistaken reset), so it is gated behind an explicit confirmation naming
+ * what is about to be overwritten.
+ */
+function BackupPanel({ onNotify, refreshPlayers, reloadSettings }) {
+  const [busy, setBusy] = useState('');
+  const fileInputRef = useRef(null);
+
+  async function handleExport() {
+    setBusy('export');
+    try {
+      const { filename } = await api.exportGame();
+      onNotify({ type: 'success', text: `Partie exportee : ${filename}` });
+    } catch (err) {
+      onNotify({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  async function handleFileChosen(event) {
+    const file = event.target.files?.[0];
+    // Reset immediately so choosing the same file twice re-triggers onChange
+    event.target.value = '';
+    if (!file) return;
+
+    let snapshot;
+    try {
+      snapshot = JSON.parse(await file.text());
+    } catch {
+      onNotify({ type: 'error', text: 'Fichier illisible : ce n\'est pas un JSON valide.' });
+      return;
+    }
+
+    const playerCount = Array.isArray(snapshot?.tables?.players)
+      ? snapshot.tables.players.length
+      : 0;
+    const exportedAt = snapshot?.exportedAt
+      ? new Date(snapshot.exportedAt).toLocaleString('fr-FR')
+      : 'date inconnue';
+
+    const confirmed = confirm(
+      `Importer cette sauvegarde ?\n\n` +
+      `Fichier : ${file.name}\n` +
+      `Exporte le : ${exportedAt}\n` +
+      `Joueurs : ${playerCount}\n\n` +
+      `ATTENTION : la partie en cours (joueurs, phases, votes, scores) sera ` +
+      `entierement remplacee. Cette action est irreversible.`
+    );
+    if (!confirmed) return;
+
+    setBusy('import');
+    try {
+      const result = await api.importGame(snapshot);
+      refreshPlayers();
+      reloadSettings();
+      onNotify({
+        type: 'success',
+        text: `Partie importee : ${result.counts.players} joueurs, ${result.counts.phases} phases, ${result.counts.votes} votes.`,
+      });
+    } catch (err) {
+      onNotify({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <h2 className="text-lg font-semibold mb-2">Sauvegarde de la partie</h2>
+      <p className="text-sm text-gray-400 mb-3">
+        L'export contient toute la partie dans un seul fichier JSON : joueurs, roles,
+        phases, votes, epreuves et scores. L'import ecrase la partie en cours.
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={handleExport}
+          disabled={!!busy}
+          className="px-4 py-2 bg-villager text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 text-sm font-medium"
+        >
+          {busy === 'export' ? 'Export...' : 'Exporter la partie'}
+        </button>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={!!busy}
+          className="px-4 py-2 bg-orange-800 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm font-medium"
+        >
+          {busy === 'import' ? 'Import...' : 'Importer une partie'}
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={handleFileChosen}
+          className="hidden"
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Games archived so far. These survive a reset and are what players browse
+ * from the end-of-game screen.
+ */
+function ArchivesPanel({ onNotify }) {
+  const [archives, setArchives] = useState([]);
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setArchives(await api.getArchives());
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleArchiveNow() {
+    const label = prompt('Nom de cette partie ?', `Partie du ${new Date().toLocaleDateString('fr-FR')}`);
+    if (label === null) return;
+
+    setBusy('create');
+    try {
+      await api.createArchive(label);
+      await load();
+      onNotify({ type: 'success', text: 'Partie archivee' });
+    } catch (err) {
+      onNotify({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  async function handleDelete(archive) {
+    if (!confirm(`Supprimer definitivement l'archive « ${archive.label} » ?`)) return;
+
+    setBusy(`delete-${archive.id}`);
+    try {
+      await api.deleteArchive(archive.id);
+      await load();
+      onNotify({ type: 'success', text: 'Archive supprimee' });
+    } catch (err) {
+      onNotify({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-lg font-semibold">Parties archivees ({archives.length})</h2>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Conservees malgre un reset. Les joueurs peuvent les consulter depuis
+            l'ecran de fin de partie.
+          </p>
+        </div>
+        <button
+          onClick={handleArchiveNow}
+          disabled={!!busy}
+          className="px-3 py-1.5 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 disabled:opacity-50 text-xs font-medium border border-gray-700 whitespace-nowrap"
+        >
+          Archiver maintenant
+        </button>
+      </div>
+
+      {archives.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucune partie archivee</p>
+      ) : (
+        <div className="space-y-1">
+          {archives.map(a => (
+            <div
+              key={a.id}
+              className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-800/50 rounded-lg"
+            >
+              <div className="min-w-0">
+                <div className="text-sm text-white truncate">{a.label}</div>
+                <div className="text-xs text-gray-500">
+                  {formatArchiveDate(a.archivedAt)}
+                  {a.winner && ` · Victoire des ${a.winner === 'wolves' ? 'Loups' : 'Villageois'}`}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(a)}
+                disabled={busy === `delete-${a.id}`}
+                className="px-2 py-1 text-xs text-gray-500 hover:text-red-400 disabled:opacity-50 whitespace-nowrap"
+              >
+                Supprimer
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatArchiveDate(value) {
+  if (!value) return 'Date inconnue';
+  const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('fr-FR');
 }

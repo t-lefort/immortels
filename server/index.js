@@ -45,7 +45,9 @@ try {
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
-app.use(express.json());
+// 10mb: a full game export (players, votes, score events) is posted back
+// as JSON on import and comfortably exceeds the 100kb default.
+app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(playerSession);
 

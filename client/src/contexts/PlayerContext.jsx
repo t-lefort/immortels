@@ -53,78 +53,50 @@ export function PlayerProvider({ children }) {
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
-  const login = useCallback(async (name) => {
+  /**
+   * Shared tail of login/register: pull the full player payload and open the
+   * socket. The session cookie is deliberately not httpOnly so the client can
+   * read it here and hand it to Socket.IO — it identifies a player, it is not
+   * an admin credential.
+   */
+  const completeAuth = useCallback(async () => {
+    const me = await playerApi.getMe();
+    setPlayer(me);
+    setGameStatus(me.gameStatus || 'setup');
+    setCurrentPhase(me.currentPhase || null);
+    setHasVoted(me.hasVoted || {});
+
+    const token = getOverrideToken() || getCookie('session_token');
+    if (token) {
+      sessionTokenRef.current = token;
+      connect(token);
+    }
+    return me;
+  }, [connect]);
+
+  const login = useCallback(async (username, password) => {
     setError(null);
     try {
-      const result = await playerApi.joinGame(name);
-      // After join, fetch full player data (server sets cookie)
-      const me = await playerApi.getMe();
-      setPlayer(me);
-      setGameStatus(me.gameStatus || 'setup');
-      setCurrentPhase(me.currentPhase || null);
-      setHasVoted(me.hasVoted || {});
-
-      // Store session token from cookie for socket
-      // We don't have direct access to httpOnly cookie,
-      // but the server side associates it. We use a special endpoint.
-      // The socket handler reads the token from the player:join event.
-      // We'll pass the token from the initial join response or reconnect.
-      // Since cookies are httpOnly, we need to ask the server for the token.
-      // Actually, the socket uses player:join with sessionToken.
-      // The join response doesn't expose the token (httpOnly).
-      // We need the server to provide us a way to get the socket token.
-      // The pragmatic approach: extract from document.cookie won't work for httpOnly.
-      // Instead, let's store a non-httpOnly "socket_token" or pass via response.
-      // For now, use the player id to reconnect via a different mechanism,
-      // OR modify the join endpoint to return the token (it's the player's own session).
-
-      // The simplest approach: the join response returns enough info.
-      // We'll modify our approach - the socket join can use a player ID based approach,
-      // or we need the token. Let's return it in the join response for socket use only.
-      // Actually, better: read from the response since we control the server.
-      // The cleanest approach: return session_token in join response for socket use.
-      // But httpOnly cookie is set. Let's store a separate "socketToken" in localStorage.
-      // OR: better yet, send the token as a response field too.
-
-      // For now, we'll work around this by storing the token from join response
-      // and using it for socket connection. The token is already in the cookie.
-      // We can read the raw cookie from response Set-Cookie... but that's blocked by browser.
-
-      // Pragmatic solution: we modify join to also return the token for client socket use.
-      // But that somewhat defeats the purpose of httpOnly.
-      // Alternative: the socket handler can use a different auth method.
-
-      // Actually, looking at socket-handlers.js, it uses sessionToken from the client.
-      // The simplest fix: make the cookie non-httpOnly so JS can read it,
-      // OR have the /join endpoint return the token.
-      // Since the original code returns the session_token for socket use,
-      // and the admin socket uses localStorage password - let's just return token from join.
-
-      // We'll store the token from a custom header or response body.
-      // Let's fetch the token via a lightweight mechanism.
-      // The cleanest: return sessionToken in join response body.
-      // We need to update server-side join to include it.
-      // For now, let's use a workaround: call a separate endpoint.
-
-      // WORKAROUND: Read cookie value (non-httpOnly approach)
-      // We'll update the server to not set httpOnly for session_token
-      // so the client can read it for socket connection.
-      // This is acceptable because session_token is not a security-critical secret
-      // (it's a player session, not admin auth).
-
-      // Use override token if active, otherwise read from cookie
-      const token = getOverrideToken() || getCookie('session_token');
-      if (token) {
-        sessionTokenRef.current = token;
-        connect(token);
-      }
-
+      const result = await playerApi.loginAccount(username, password);
+      await completeAuth();
       return result;
     } catch (err) {
       setError(err.message);
       throw err;
     }
-  }, [connect]);
+  }, [completeAuth]);
+
+  const register = useCallback(async (account) => {
+    setError(null);
+    try {
+      const result = await playerApi.registerAccount(account);
+      await completeAuth();
+      return result;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, [completeAuth]);
 
   const vote = useCallback(async (targetId) => {
     try {
@@ -497,6 +469,7 @@ export function PlayerProvider({ children }) {
 
     // Actions
     login,
+    register,
     vote,
     villagerGuess,
     ghostIdentify,

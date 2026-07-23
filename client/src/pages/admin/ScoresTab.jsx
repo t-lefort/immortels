@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import * as api from '../../services/adminApi.js';
 import { rankScoreboard } from '../../utils/scoreRanking.js';
+import { useIncognito } from '../../hooks/useIncognito.js';
+import IncognitoToggle, { HiddenRole } from '../../components/IncognitoToggle.jsx';
 
 export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
   const [scoreboard, setScoreboard] = useState([]);
@@ -9,6 +11,16 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
   const rankedScoreboard = rankScoreboard(scoreboard);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const { incognito, toggleIncognito } = useIncognito();
+  const [peeked, setPeeked] = useState(() => new Set());
+
+  function peek(id) {
+    setPeeked(prev => new Set(prev).add(id));
+  }
+
+  // The end-condition banner and the faction tallies count wolves, so they
+  // give the split away just as surely as the role column does.
+  const rolesVisible = !incognito;
 
   useEffect(() => {
     loadScoreboard();
@@ -115,6 +127,8 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
 
   return (
     <div className="space-y-4">
+      <IncognitoToggle incognito={incognito} onToggle={toggleIncognito} />
+
       {message && (
         <div className={`px-4 py-2 rounded-lg text-sm ${
           message.type === 'success' ? 'bg-green-900/50 text-green-300 border border-green-800' :
@@ -125,8 +139,8 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
         </div>
       )}
 
-      {/* End condition indicator */}
-      {gameStatus === 'in_progress' && (() => {
+      {/* End condition indicator — counts wolves, so hidden while incognito */}
+      {gameStatus === 'in_progress' && rolesVisible && (() => {
         const aliveWolves = scoreboard.filter(p => p.role === 'wolf' && p.status === 'alive').length;
         const aliveVillagers = scoreboard.filter(p => p.role === 'villager' && p.status === 'alive').length;
         const wolvesAllDead = aliveWolves === 0 && scoreboard.length > 0;
@@ -214,7 +228,7 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
                   <td className="px-3 py-2 text-gray-500 font-mono">{p.rank}</td>
                   <td className="px-3 py-2">
                     <span className={`font-medium ${
-                      p.role === 'wolf' ? 'text-red-200' :
+                      rolesVisible && p.role === 'wolf' ? 'text-red-200' :
                       p.status === 'ghost' ? 'text-emerald-200' :
                       'text-white'
                     }`}>
@@ -222,7 +236,13 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    {getRoleBadge(p.role, p.special_role)}
+                    <HiddenRole
+                      incognito={incognito}
+                      peeked={peeked.has(p.id)}
+                      onPeek={() => peek(p.id)}
+                    >
+                      {getRoleBadge(p.role, p.special_role)}
+                    </HiddenRole>
                   </td>
                   <td className="px-3 py-2">
                     <span className={getStatusClass(p.status)}>
@@ -280,14 +300,18 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
         </table>
       </div>
 
-      {/* Summary stats */}
+      {/* Summary stats — faction counts only when roles are visible */}
       {scoreboard.length > 0 && (
         <div className="flex gap-4 text-xs text-gray-500">
           <span>{scoreboard.length} joueurs</span>
           <span>{scoreboard.filter(p => p.status === 'alive').length} vivants</span>
           <span>{scoreboard.filter(p => p.status === 'ghost').length} fantomes</span>
-          <span>{scoreboard.filter(p => p.role === 'wolf').length} loups</span>
-          <span>{scoreboard.filter(p => p.role === 'villager').length} villageois</span>
+          {rolesVisible && (
+            <>
+              <span>{scoreboard.filter(p => p.role === 'wolf').length} loups</span>
+              <span>{scoreboard.filter(p => p.role === 'villager').length} villageois</span>
+            </>
+          )}
         </div>
       )}
     </div>

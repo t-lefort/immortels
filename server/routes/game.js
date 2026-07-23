@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb, getSetting } from '../db.js';
 import { computeVoteCounts } from '../socket-rooms.js';
 import { getScoreboard } from '../game-engine.js';
+import { listArchives, getArchive } from '../game-archive.js';
 
 const router = Router();
 
@@ -73,6 +74,38 @@ router.get('/scoreboard', (_req, res) => {
   }
   const winner = getSetting('game_winner') || null;
   res.json({ scoreboard: getScoreboard(), winner });
+});
+
+/**
+ * GET /api/game/archives
+ * List past games. Players may only browse archives once the current game is
+ * over — during play this would leak roles from a game some of them replayed.
+ */
+router.get('/archives', (_req, res) => {
+  if (getSetting('game_status') !== 'finished') {
+    return res.status(403).json({
+      error: 'Les parties précédentes sont consultables une fois la partie terminée.',
+    });
+  }
+  res.json(listArchives());
+});
+
+/**
+ * GET /api/game/archives/:id
+ * Full detail of one past game (phases, votes, scoreboard).
+ */
+router.get('/archives/:id', (req, res) => {
+  if (getSetting('game_status') !== 'finished') {
+    return res.status(403).json({
+      error: 'Les parties précédentes sont consultables une fois la partie terminée.',
+    });
+  }
+
+  const archive = getArchive(req.params.id);
+  if (!archive) {
+    return res.status(404).json({ error: 'Partie introuvable.' });
+  }
+  res.json(archive);
 });
 
 /**

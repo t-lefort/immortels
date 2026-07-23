@@ -10,6 +10,7 @@ import SettingsTab from './SettingsTab.jsx';
 import ConnectionStatus from '../../components/ConnectionStatus.jsx';
 import { useAdminSocket } from '../../hooks/useAdminSocket.js';
 import { getPlayers, checkAuth } from '../../services/adminApi.js';
+import { useIncognito } from '../../hooks/useIncognito.js';
 
 const TABS = [
   { id: 'setup', label: 'Setup' },
@@ -29,6 +30,7 @@ export default function AdminPage() {
   const [gameStatus, setGameStatus] = useState('setup');
   const [currentPhase, setCurrentPhase] = useState(null);
   const { connected, on } = useAdminSocket();
+  const { incognito } = useIncognito();
 
   const refreshPlayers = useCallback(async () => {
     try {
@@ -157,7 +159,7 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-gray-400">
-            {aliveCount} vivants · {wolfCount} loups · {ghostCount} fantômes
+            {aliveCount} vivants · {incognito ? '•• loups' : `${wolfCount} loups`} · {ghostCount} fantômes
           </span>
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
         </div>

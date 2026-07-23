@@ -157,6 +157,13 @@ export function createChallenge(data) {
   });
 }
 
+export function setChallengeWinners(challengeId, winningPlayerIds) {
+  return request(`/challenge/${challengeId}/winners`, {
+    method: 'PUT',
+    body: JSON.stringify({ winningPlayerIds }),
+  });
+}
+
 export function assignChallenge(challengeId, playerId) {
   return request('/challenge/assign', {
     method: 'POST',
@@ -187,6 +194,73 @@ export function dismissVoteReveal() {
   return request('/vote-reveal/dismiss', { method: 'POST' });
 }
 
+export function showVoteReveal(phaseId) {
+  return request('/vote-reveal/show', {
+    method: 'POST',
+    body: JSON.stringify({ phaseId }),
+  });
+}
+
+export function getVoteReveal(phaseId) {
+  return request(`/vote-reveal/${phaseId}`);
+}
+
+// ─── Export / Import / Archives ─────────────────────────────────────────────
+
+/**
+ * Downloads the full game as a JSON file. Bypasses `request` because the
+ * response is a file attachment, not JSON to parse.
+ */
+export async function exportGame() {
+  const res = await fetch(`${BASE}/game/export`, { headers: getHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Erreur ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : 'les-immortels-export.json';
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  return { filename };
+}
+
+export function importGame(snapshot) {
+  return request('/game/import', {
+    method: 'POST',
+    body: JSON.stringify(snapshot),
+  });
+}
+
+export function getArchives() {
+  return request('/archives');
+}
+
+export function getArchive(id) {
+  return request(`/archives/${id}`);
+}
+
+export function createArchive(label) {
+  return request('/archives', {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function deleteArchive(id) {
+  return request(`/archives/${id}`, { method: 'DELETE' });
+}
+
 // ─── Overrides ──────────────────────────────────────────────────────────────
 
 export function updatePlayer(id, data) {
@@ -210,8 +284,11 @@ export function updateSettings(settings) {
   });
 }
 
-export function resetGame() {
-  return request('/game/reset', { method: 'POST' });
+export function resetGame({ archive = true, archiveLabel } = {}) {
+  return request('/game/reset', {
+    method: 'POST',
+    body: JSON.stringify({ archive, archiveLabel }),
+  });
 }
 
 export function forceVote(phaseId, voterId, targetId, voteType) {

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as api from '../../services/adminApi.js';
+import PhaseVoteDetails from '../../components/PhaseVoteDetails.jsx';
+import { shareVoteImage } from '../../utils/voteImage.js';
 
 export default function HistoryTab() {
   const [phases, setPhases] = useState([]);
@@ -267,98 +269,116 @@ export default function HistoryTab() {
       {/* Vote Details */}
       {selectedPhase && (
         <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
-          <h2 className="text-lg font-semibold mb-3">
-            Détails — {selectedPhase.type === 'night' ? 'Nuit' : 'Conseil'} #{selectedPhase.id}
-          </h2>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <h2 className="text-lg font-semibold">
+              Détails — {selectedPhase.type === 'night' ? 'Nuit' : 'Conseil'} #{selectedPhase.id}
+            </h2>
+          </div>
+
+          {selectedPhase.type === 'village_council' && (
+            <CouncilVoteActions phase={selectedPhase} />
+          )}
 
           {loading ? (
             <p className="text-gray-500 text-sm">Chargement...</p>
-          ) : voteData ? (
-            <div className="space-y-4">
-              {/* Tallies */}
-              {voteData.wolfResults?.length > 0 && (
-                <TallySection title="Votes loups" results={voteData.wolfResults} color="text-red-400" />
-              )}
-              {voteData.villagerGuessResults?.length > 0 && (
-                <TallySection title="Devinettes villageois" results={voteData.villagerGuessResults} color="text-blue-400" />
-              )}
-              {voteData.ghostResults?.length > 0 && (
-                <TallySection title="Votes fantômes" results={voteData.ghostResults} color="text-green-400" />
-              )}
-              {voteData.villageResults?.length > 0 && (
-                <TallySection title="Votes du conseil" results={voteData.villageResults} color="text-yellow-400" />
-              )}
-
-              {/* Ghost identifications (villager ghosts guessing wolves) */}
-              {voteData.ghostIdentifications?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium mb-1 text-purple-400">Identifications fantômes</h3>
-                  <div className="space-y-1">
-                    {voteData.ghostIdentifications.map((gi, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-gray-300">
-                        <span className="text-purple-300">{gi.ghost_name}</span>
-                        <span className="text-gray-600">&rarr;</span>
-                        <span className="text-white">{gi.target_name}</span>
-                        <span className={`px-1.5 py-0.5 rounded ${
-                          gi.target_is_wolf
-                            ? 'bg-green-900/50 text-green-300'
-                            : 'bg-red-900/50 text-red-300'
-                        }`}>
-                          {gi.target_is_wolf ? 'Correct' : 'Faux'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Individual votes */}
-              {voteData.details?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">
-                    Votes individuels ({voteData.details.length})
-                  </h3>
-                  <div className="space-y-1">
-                    {voteData.details.map(v => (
-                      <div key={v.id} className="flex items-center gap-2 text-xs text-gray-300">
-                        <span className={`px-1.5 py-0.5 rounded ${
-                          v.vote_type === 'wolf' ? 'bg-red-900/50 text-red-300' :
-                          v.vote_type === 'village' ? 'bg-yellow-900/50 text-yellow-300' :
-                          v.vote_type === 'villager_guess' ? 'bg-blue-900/50 text-blue-300' :
-                          'bg-green-900/50 text-green-300'
-                        }`}>
-                          {v.vote_type}
-                        </span>
-                        <span>
-                          {v.voter_name}
-                          <span className="text-gray-600 ml-1">
-                            ({v.voter_role === 'wolf' ? 'L' : 'V'})
-                          </span>
-                        </span>
-                        <span className="text-gray-600">&rarr;</span>
-                        <span>
-                          {v.target_name || '(abstention)'}
-                          {v.target_role && (
-                            <span className="text-gray-600 ml-1">
-                              ({v.target_role === 'wolf' ? 'L' : 'V'})
-                            </span>
-                          )}
-                        </span>
-                        {!v.is_valid && <span className="text-red-400">(invalide)</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {voteData.details?.length === 0 && (
-                <p className="text-gray-500 text-sm">Aucun vote enregistré</p>
-              )}
-            </div>
           ) : (
-            <p className="text-gray-500 text-sm">Aucune donnée</p>
+            <PhaseVoteDetails voteData={voteData} />
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Re-display a past council's votes on the projected dashboard, and turn the
+ * same data into a PNG the admin can share in the group chat.
+ */
+function CouncilVoteActions({ phase }) {
+  const [busy, setBusy] = useState('');
+  const [feedback, setFeedback] = useState(null);
+
+  async function handleShowOnDashboard() {
+    setBusy('show');
+    setFeedback(null);
+    try {
+      const result = await api.showVoteReveal(phase.id);
+      setFeedback({ type: 'success', text: `${result.voteCount} votes affichés sur le dashboard` });
+    } catch (err) {
+      setFeedback({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  async function handleDismiss() {
+    setBusy('dismiss');
+    setFeedback(null);
+    try {
+      await api.dismissVoteReveal();
+      setFeedback({ type: 'success', text: 'Affichage retiré' });
+    } catch (err) {
+      setFeedback({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  async function handleShareImage() {
+    setBusy('image');
+    setFeedback(null);
+    try {
+      const data = await api.getVoteReveal(phase.id);
+      const outcome = await shareVoteImage(
+        {
+          councilVotes: data.councilVotes,
+          eliminatedPlayer: data.eliminatedPlayer,
+          title: 'Votes du Conseil',
+          subtitle: `Conseil #${phase.id}`,
+        },
+        `votes-conseil-${phase.id}.png`
+      );
+
+      if (outcome !== 'cancelled') {
+        setFeedback({
+          type: 'success',
+          text: outcome === 'shared' ? 'Image partagée' : 'Image téléchargée',
+        });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', text: err.message });
+    }
+    setBusy('');
+  }
+
+  return (
+    <div className="mb-4 p-3 bg-gray-800/40 border border-gray-700/60 rounded-lg">
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={handleShowOnDashboard}
+          disabled={!!busy}
+          className="px-3 py-1.5 bg-yellow-800 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-sm font-medium"
+        >
+          {busy === 'show' ? 'Envoi...' : 'Revoir sur le dashboard'}
+        </button>
+        <button
+          onClick={handleDismiss}
+          disabled={!!busy}
+          className="px-3 py-1.5 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 text-sm"
+        >
+          Retirer du dashboard
+        </button>
+        <button
+          onClick={handleShareImage}
+          disabled={!!busy}
+          className="px-3 py-1.5 bg-villager text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 text-sm font-medium"
+        >
+          {busy === 'image' ? 'Génération...' : 'Image à partager'}
+        </button>
+      </div>
+
+      {feedback && (
+        <p className={`mt-2 text-xs ${feedback.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+          {feedback.text}
+        </p>
       )}
     </div>
   );
@@ -408,6 +428,7 @@ function scoreEventReasonLabel(event) {
     villager_voted_wolf: 'Vote du conseil contre un loup',
     wolf_survived_council: 'Loup survivant au conseil',
     challenge_winner: 'Membre de l’équipe gagnante',
+    challenge_winner_removed: 'Retiré de l’équipe gagnante',
     winning_faction: 'Victoire de la faction',
     winning_faction_survivor: 'Victoire de la faction + bonus de survie',
     hunter_killed_wolf: 'Chasseur : loup éliminé',
@@ -441,28 +462,8 @@ function snapshotReasonLabel(reason) {
     admin_score_override: 'Modification manuelle admin',
     phase_undo_scores: 'Annulation de phase',
     hunter_score: 'Score chasseur',
+    challenge_winners_updated: 'Équipe gagnante modifiée',
   };
   return labels[reason] || reason || 'Snapshot';
 }
 
-function TallySection({ title, results, color }) {
-  return (
-    <div>
-      <h3 className={`text-sm font-medium mb-1 ${color}`}>{title}</h3>
-      <div className="space-y-1">
-        {results.map(r => (
-          <div key={r.targetId} className="flex items-center gap-2 text-sm">
-            <span className="text-white w-28 truncate">{r.targetName}</span>
-            <div className="flex-1 h-1.5 bg-gray-800 rounded">
-              <div
-                className="h-1.5 bg-gray-500 rounded"
-                style={{ width: `${Math.min(100, r.count * 15)}%` }}
-              />
-            </div>
-            <span className="text-gray-400 text-xs w-6 text-right">{r.count}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

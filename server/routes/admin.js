@@ -8,6 +8,15 @@ import { recordScoreSnapshot, listScoreSnapshots } from '../score-snapshots.js';
 import { recordScoreEvent, listScoreEvents } from '../score-events.js';
 import { removeSpecialRole } from '../role-helpers.js';
 import {
+  exportGame,
+  importGame,
+  validateSnapshot,
+  archiveGame,
+  listArchives,
+  getArchive,
+  deleteArchive,
+} from '../game-archive.js';
+import {
   assignRoles,
   createPhase,
   startPhase,
@@ -17,6 +26,7 @@ import {
   getVoteResults,
   getVoteDetails,
   submitVote,
+  isVoteValid,
   resolveNight,
   resolveVillageCouncil,
   generateSpeechOrder,
@@ -264,30 +274,19 @@ router.post('/phase/start', (req, res) => {
       const aliveGhosts = db.prepare("SELECT id, name, status FROM players WHERE status = 'ghost'").all();
 
       if (phase.type === 'night') {
-        // Wolves see list of alive non-wolf targets
-        const wolfTargets = db
-          .prepare("SELECT id, name FROM players WHERE status = 'alive' AND role != 'wolf'")
-          .all();
-        emitToWolves(io, 'phase:started', {
-          phase,
-          phaseType: 'night',
-          targets: wolfTargets,
-        });
-
-        // Alive villagers see villager guess targets (all alive players except themselves — handled client-side)
+        // Every alive player — wolf or villager — receives the exact same
+        // target list (all other alive players). Handing wolves a shorter
+        // list would let anyone deduce a role just by counting the names on
+        // a screenshot. A wolf voting for a wolf is stored but not counted.
         const allAlive = db
           .prepare("SELECT id, name FROM players WHERE status = 'alive'")
           .all();
 
-        // Send to each alive villager individually
-        const aliveVillagers = db
-          .prepare("SELECT id FROM players WHERE status = 'alive' AND role = 'villager'")
-          .all();
-        for (const v of aliveVillagers) {
-          emitToPlayer(io, v.id, 'phase:started', {
+        for (const p of allAlive) {
+          emitToPlayer(io, p.id, 'phase:started', {
             phase,
             phaseType: 'night',
-            targets: allAlive.filter(p => p.id !== v.id),
+            targets: allAlive.filter(t => t.id !== p.id),
           });
         }
 
@@ -961,6 +960,92 @@ router.post('/challenge', (req, res) => {
   res.json({ challenge, scoreChanges });
 });
 
+/**
+ * PUT /challenge/:id/winners { winningPlayerIds }
+ *
+ * Records (or corrects) the winning team of an épreuve. Only the difference
+ * with the previously stored team is scored, so fixing a mistake doesn't
+ * double-award anyone or leave a stale point behind.
+ */
+router.put('/challenge/:id/winners', (req, res) => {
+  const { winningPlayerIds } = req.body;
+  const challengeId = Number(req.params.id);
+
+  if (!Array.isArray(winningPlayerIds)) {
+    return res.status(400).json({ error: 'winningPlayerIds doit être un tableau' });
+  }
+
+  const db = getDb();
+  const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(challengeId);
+  if (!challenge) {
+    return res.status(404).json({ error: 'Épreuve introuvable' });
+  }
+
+  const nextIds = [...new Set(winningPlayerIds.map(Number))];
+  if (nextIds.some(id => !Number.isInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont invalides' });
+  }
+
+  const getPlayer = db.prepare('SELECT id, name FROM players WHERE id = ?');
+  const missing = nextIds.filter(id => !getPlayer.get(id));
+  if (missing.length > 0) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont introuvables' });
+  }
+
+  let previousIds = [];
+  try {
+    const parsed = JSON.parse(challenge.winning_team_player_ids || '[]');
+    previousIds = Array.isArray(parsed) ? [...new Set(parsed.map(Number))] : [];
+  } catch {
+    previousIds = [];
+  }
+
+  const added = nextIds.filter(id => !previousIds.includes(id));
+  const removed = previousIds.filter(id => !nextIds.includes(id));
+
+  const scoreChanges = [];
+
+  if (added.length > 0 || removed.length > 0) {
+    recordScoreSnapshot('challenge_winners_updated', {
+      challengeId,
+      added,
+      removed,
+    });
+  }
+
+  const updateScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
+
+  db.transaction(() => {
+    db.prepare('UPDATE challenges SET winning_team_player_ids = ? WHERE id = ?')
+      .run(JSON.stringify(nextIds), challengeId);
+
+    for (const [ids, delta, reason] of [
+      [added, 1, 'challenge_winner'],
+      [removed, -1, 'challenge_winner_removed'],
+    ]) {
+      for (const playerId of ids) {
+        const player = getPlayer.get(playerId);
+        if (!player) continue;
+        updateScore.run(delta, playerId);
+        recordScoreEvent({
+          playerId,
+          sourceType: 'challenge',
+          sourceId: challengeId,
+          reason,
+          delta,
+          metadata: { challengeName: challenge.name },
+        }, db);
+        scoreChanges.push({ playerId, playerName: player.name, delta, reason });
+      }
+    }
+  })();
+
+  logger.score('Challenge winners updated', { challengeId, added: added.length, removed: removed.length });
+
+  const updated = db.prepare('SELECT * FROM challenges WHERE id = ?').get(challengeId);
+  res.json({ challenge: updated, scoreChanges });
+});
+
 router.post('/challenge/assign', (req, res) => {
   const { challengeId, playerId } = req.body;
 
@@ -1043,6 +1128,85 @@ router.post('/vote-reveal/dismiss', (req, res) => {
   }
 
   res.json({ dismissed: true });
+});
+
+/**
+ * Build the council vote breakdown of a past phase: who voted for whom, plus
+ * the player eliminated that phase (highlighted in the reveal).
+ */
+function buildCouncilVoteReveal(phaseId) {
+  const db = getDb();
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
+  if (!phase) return { error: 'Phase introuvable' };
+  if (phase.type !== 'village_council') {
+    return { error: 'Cette phase n\'est pas un conseil du village' };
+  }
+
+  const councilVotes = getVoteDetails(phaseId)
+    .filter(v => v.vote_type === 'village' && v.target_id != null)
+    .map(v => ({
+      voterName: v.voter_name,
+      targetName: v.target_name,
+      voterId: v.voter_id,
+      targetId: v.target_id,
+    }));
+
+  if (councilVotes.length === 0) {
+    return { error: 'Aucun vote enregistré pour cette phase' };
+  }
+
+  const victim = db.prepare(`
+    SELECT p.id, p.name, p.role, p.special_role
+    FROM phase_victims pv
+    JOIN players p ON pv.player_id = p.id
+    WHERE pv.phase_id = ? AND pv.eliminated_by = 'village' AND pv.was_resurrected = 0
+    LIMIT 1
+  `).get(phaseId);
+
+  return { phase, councilVotes, eliminatedPlayer: victim || null };
+}
+
+/**
+ * Re-display the votes of any past council on the dashboard.
+ * Lets the admin bring a previous vote back up for discussion.
+ */
+router.post('/vote-reveal/show', (req, res) => {
+  const { phaseId } = req.body;
+  if (!phaseId) {
+    return res.status(400).json({ error: 'phaseId requis' });
+  }
+
+  const data = buildCouncilVoteReveal(Number(phaseId));
+  if (data.error) {
+    return res.status(400).json({ error: data.error });
+  }
+
+  const io = req.app.get('io');
+  if (io) {
+    emitToDashboard(io, 'dashboard:vote_reveal', {
+      phaseId: Number(phaseId),
+      councilVotes: data.councilVotes,
+      eliminatedPlayer: data.eliminatedPlayer,
+    });
+  }
+
+  logger.phase('Council votes re-displayed on dashboard', { phaseId: Number(phaseId) });
+  res.json({ shown: true, phaseId: Number(phaseId), voteCount: data.councilVotes.length });
+});
+
+/**
+ * Council vote breakdown of a past phase, for the admin's shareable image.
+ */
+router.get('/vote-reveal/:phaseId', (req, res) => {
+  const data = buildCouncilVoteReveal(Number(req.params.phaseId));
+  if (data.error) {
+    return res.status(400).json({ error: data.error });
+  }
+  res.json({
+    phase: data.phase,
+    councilVotes: data.councilVotes,
+    eliminatedPlayer: data.eliminatedPlayer,
+  });
 });
 
 router.post('/dashboard/force-home', (req, res) => {
@@ -1289,20 +1453,95 @@ router.put('/settings', (req, res) => {
 });
 
 router.post('/game/reset', (req, res) => {
+  // Auto-archive a finished game before wiping it, so it stays reviewable.
+  const archiveOnReset = req.body?.archive !== false;
+  let archived = null;
+  if (archiveOnReset && getSetting('game_status') === 'finished') {
+    try {
+      archived = archiveGame(req.body?.archiveLabel);
+    } catch (err) {
+      logger.error('Could not archive game before reset', { error: err.message });
+    }
+  }
+
   resetGame();
 
   // Clear timer settings
   setSetting('timer_duration', null);
   setSetting('timer_started_at', null);
 
-  logger.game('Game reset');
+  logger.game('Game reset', { archivedId: archived?.id || null });
 
   const io = req.app.get('io');
   if (io) {
     emitToAll(io, 'game:reset', {});
   }
 
-  res.json({ reset: true });
+  res.json({ reset: true, archived: archived ? { id: archived.id, label: archived.label } : null });
+});
+
+// ─── Export / Import / Archives ─────────────────────────────────────────────
+
+router.get('/game/export', (_req, res) => {
+  const snapshot = exportGame();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="les-immortels-${stamp}.json"`);
+  res.send(JSON.stringify(snapshot, null, 2));
+});
+
+router.post('/game/import', (req, res) => {
+  const payload = req.body;
+
+  const validationError = validateSnapshot(payload);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const counts = importGame(payload);
+
+    const io = req.app.get('io');
+    if (io) {
+      // Every client must rebuild from scratch — the game they were showing
+      // no longer exists. game:reset sends players back to the login screen.
+      emitToAll(io, 'game:reset', {});
+    }
+
+    res.json({ imported: true, counts });
+  } catch (err) {
+    logger.error('Game import failed', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/archives', (_req, res) => {
+  res.json(listArchives());
+});
+
+router.get('/archives/:id', (req, res) => {
+  const archive = getArchive(req.params.id);
+  if (!archive) {
+    return res.status(404).json({ error: 'Archive introuvable' });
+  }
+  res.json(archive);
+});
+
+router.post('/archives', (req, res) => {
+  try {
+    const archive = archiveGame(req.body?.label);
+    res.json(archive);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/archives/:id', (req, res) => {
+  const deleted = deleteArchive(req.params.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Archive introuvable' });
+  }
+  res.json({ deleted: true, id: Number(req.params.id) });
 });
 
 // ─── Force Vote ─────────────────────────────────────────────────────────────
@@ -1345,7 +1584,8 @@ router.post('/force-vote', (req, res) => {
   }
 
   try {
-    const vote = submitVote(Number(phaseId), Number(voterId), Number(targetId), voteType);
+    const valid = isVoteValid(voteType, voter, target);
+    const vote = submitVote(Number(phaseId), Number(voterId), Number(targetId), voteType, valid);
     logger.vote('Vote forced by admin', {
       phaseId: Number(phaseId),
       voterId: Number(voterId),

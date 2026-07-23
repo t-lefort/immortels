@@ -254,6 +254,14 @@ export function useDashboardSocket() {
       setOverlay(null);
     });
 
+    // ─── Vote reveal replay (admin re-displays a past council) ───────
+    socket.on('dashboard:vote_reveal', (data) => {
+      if (!data?.councilVotes?.length) return;
+      setCouncilVotes(data.councilVotes);
+      setEliminatedPlayer(data.eliminatedPlayer || null);
+      setOverlay('vote_reveal');
+    });
+
     // ─── Vote reveal dismiss ─────────────────────────────────────────
     socket.on('dashboard:vote_reveal_dismiss', () => {
       setCouncilVotes(null);

@@ -168,6 +168,7 @@ function sendPlayerStateSync(socket, player) {
       .all();
   }
 
+
   const syncedPlayer = {
     id: player.id,
     name: player.name,

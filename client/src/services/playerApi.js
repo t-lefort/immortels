@@ -26,10 +26,17 @@ async function request(url, options = {}) {
 
 // ─── Auth / Session ──────────────────────────────────────────────────────────
 
-export function joinGame(name) {
-  return request(`${PLAYER_BASE}/join`, {
+export function loginAccount(username, password) {
+  return request(`${PLAYER_BASE}/login`, {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function registerAccount({ username, password, firstName, lastName }) {
+  return request(`${PLAYER_BASE}/register`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password, firstName, lastName }),
   });
 }
 
@@ -53,6 +60,16 @@ export function getPhase(phaseId) {
 
 export function getScoreboard() {
   return request(`${GAME_BASE}/scoreboard`);
+}
+
+// ─── Past games ──────────────────────────────────────────────────────────────
+
+export function getArchives() {
+  return request(`${GAME_BASE}/archives`);
+}
+
+export function getArchive(id) {
+  return request(`${GAME_BASE}/archives/${id}`);
 }
 
 // ─── Voting ──────────────────────────────────────────────────────────────────

@@ -42,7 +42,7 @@ les-immortels/
 
 ## Three Main Interfaces
 
-1. **`/play`** — Player interface (mobile-first, zero-friction login by first name + initial if collision, session cookie)
+1. **`/play`** — Player interface (mobile-first, account login: pseudo + password, session cookie). The pseudo is login-only; every screen displays "Prénom Nom"
 2. **`/admin`** — Admin panel (password-protected, Thomas is sole admin, controls all phase transitions, can override anything)
 3. **`/dashboard`** — Projected display (read-only, large text, animations, 16:9 optimized)
 
@@ -51,17 +51,22 @@ les-immortels/
 - 29 players: 8 wolves + 21 villagers, ~18 phases across 3 days
 - Night = single phase with parallel votes (wolves + villagers guess + ghosts)
 - Villagers choose a player they think is a villager at night (+1 if correct) — same UX as wolf vote, serves as camouflage
-- Role is shown once at game start with anti-screenshot protection, never re-displayed
+- **Night vote screens must stay pixel-identical between wolves and villagers**, including the target list, which is every alive player except oneself. A wolf voting for a wolf is stored with `is_valid = 0` rather than rejected: an error message would only ever be seen by a wolf, and a shorter list would leak the role to anyone counting names on a screenshot
+- Role is shown **once at game start and never again** (`role_seen`), behind a press-and-hold gesture. Wolves must memorise their pack there, since the night vote list gives them no hint
+- A screenshot cannot be prevented (no browser API can, and a second phone defeats anything client-side), so the capture is made worthless instead: on that one screen **any player can display a Villageois card**, and the real/fake selector is hidden while the card is held, so a capture cannot reveal which mode produced it. Since everyone could have captured a Villageois card at launch, producing one later proves nothing
+- Only the villager card is fakeable, deliberately. A fake wolf card would need an invented pack, and an early screenshot freezes those names while the village keeps learning roles — the day one of them is publicly cleared, that capture would prove its holder was never a wolf. Nobody needs to pretend to be a wolf, so the mode does not exist
+- "J'ai compris" only unlocks once the player has actually held the **real** card, so nobody dismisses the screen forever having only seen the decoy
 - Council phases: speech order + timer (>10 alive) or 10-min free debate (≤10 alive), then vote
 - Eliminated players become ghosts who vote each night + villager ghosts can identify wolves
 - 6 special roles earned through challenges — one role per player max, challenge teams entered manually by admin
 - Night power activation order: Protector → Sorcière → Voyante → then admin reveals results
 - Scores are computed automatically but hidden from players until game end
 
-## Database Schema (9 tables)
+## Database Schema (10 tables)
 
 - **`game_settings`**: key/value store for all game state (current phase, admin password, protected player, witch/seer uses, mayor, etc.)
-- **`players`**: id, name (unique), role (wolf/villager), special_role (one max), status (alive/ghost), session_token, score
+- **`players`**: id, name (display name, unique), username + password_hash (scrypt) + first_name/last_name for the account, role (wolf/villager), special_role (one max), status (alive/ghost), session_token, score
+- **`archived_games`**: finished games serialized to JSON, preserved across resets so players can review them from the end screen
 - **`phases`**: id, type (night/village_council), status (pending/active/voting/completed), timestamps
 - **`phase_victims`**: phase_id, player_id, eliminated_by, was_protected, was_resurrected (supports multiple victims per phase)
 - **`votes`**: phase_id, voter_id, target_id, vote_type (wolf/ghost_eliminate/village/villager_guess), is_valid
@@ -79,6 +84,7 @@ Client→Server: `player:join`, `vote:submit`, `villager:guess`, `ghost:identify
 ## Resilience Requirements
 
 - All game state must be recoverable from SQLite alone (no critical in-memory-only state) — server restart mid-phase must work
+- A whole game can be exported to / imported from a single JSON file (`server/game-archive.js`); the same serializer feeds the player-visible archives
 - Votes persisted to DB immediately on receipt — reconnecting players recover state via session token
 - Admin can force-close voting, force hunter choice, force any action if a player is unresponsive
 - Tie-breaking: admin decides for wolves, random for village/ghosts
