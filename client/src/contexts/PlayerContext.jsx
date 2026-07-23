@@ -30,9 +30,6 @@ export function PlayerProvider({ children }) {
   const [voteCount, setVoteCount] = useState(0);
   const [totalExpected, setTotalExpected] = useState(0);
   const [wolves, setWolves] = useState([]);
-  // Total wolves in the game — public information, and what sizes the decoy
-  // pack on a faked role card.
-  const [wolfCount, setWolfCount] = useState(0);
   const [eliminated, setEliminated] = useState([]);
   const [timerDuration, setTimerDuration] = useState(null);
   const [specialPrompt, setSpecialPrompt] = useState(null);
@@ -68,7 +65,6 @@ export function PlayerProvider({ children }) {
     setGameStatus(me.gameStatus || 'setup');
     setCurrentPhase(me.currentPhase || null);
     setHasVoted(me.hasVoted || {});
-    if (me.wolfCount !== undefined) setWolfCount(me.wolfCount);
 
     const token = getOverrideToken() || getCookie('session_token');
     if (token) {
@@ -199,7 +195,6 @@ export function PlayerProvider({ children }) {
         setGameStatus(me.gameStatus || 'setup');
         setCurrentPhase(me.currentPhase || null);
         setHasVoted(me.hasVoted || {});
-        if (me.wolfCount !== undefined) setWolfCount(me.wolfCount);
         setError(null);
 
         // Connect socket — use override token if active, otherwise cookie
@@ -265,7 +260,6 @@ export function PlayerProvider({ children }) {
           setGameStatus(me.gameStatus || 'setup');
           setCurrentPhase(me.currentPhase || null);
           setHasVoted(me.hasVoted || {});
-          if (me.wolfCount !== undefined) setWolfCount(me.wolfCount);
           setError(null);
           toast.info('Connexion retablie');
           // Re-fetch wolves list for wolf players
@@ -301,7 +295,6 @@ export function PlayerProvider({ children }) {
         if (data.totalExpected !== undefined) setTotalExpected(data.totalExpected);
         // Restore wolf pack list from state sync (sent to wolf players)
         if (data.wolves) setWolves(data.wolves);
-        if (data.wolfCount !== undefined) setWolfCount(data.wolfCount);
         // Clear any previous errors on successful sync
         setError(null);
       }),
@@ -335,7 +328,6 @@ export function PlayerProvider({ children }) {
         setVoteCount(0);
         setTotalExpected(0);
         setWolves([]);
-        setWolfCount(0);
         setEliminated([]);
         setPhaseResult(null);
         setPlayer(null);
@@ -467,7 +459,6 @@ export function PlayerProvider({ children }) {
     totalExpected,
     wolves,
     eliminated,
-    wolfCount,
     timerDuration,
     specialPrompt,
     specialResult,

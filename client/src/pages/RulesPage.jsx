@@ -28,7 +28,7 @@ const sections = [
   },
   {
     id: 'ma-carte',
-    title: 'Ma carte — et pourquoi une capture d\'écran ne prouve rien',
+    title: 'Ma carte — et pourquoi une capture d\'écran ne prouve pas l\'innocence',
     color: 'text-amber-400',
     borderColor: 'border-amber-900/40',
     content: (
@@ -38,24 +38,21 @@ const sections = [
           gardez le doigt appuyé. Dès que vous relâchez, la carte disparaît.
         </p>
         <p className="mb-3">
-          <strong className="text-amber-400">Le point important :</strong> chacun peut
-          y afficher <strong>la carte de son choix</strong>. Un villageois peut montrer
-          « Loup », un loup peut montrer « Villageois ». Rien ne distingue une carte
-          réelle d'une carte truquée.
+          <strong className="text-amber-400">Le point important :</strong> n'importe qui
+          peut y afficher une carte <strong>Villageois</strong>, qu'il le soit ou non.
+          Un loup montre exactement le même écran qu'un villageois. Rien ne les
+          distingue.
         </p>
         <p className="mb-3">
-          <strong className="text-amber-400">Y compris la meute :</strong> une fausse
-          carte Loup affiche elle aussi une liste de complices, du bon nombre et
-          cohérente avec ce que le village sait déjà. La présence d'une meute
-          n'atteste donc rien du tout.
+          Seule la carte Villageois est truquable — personne n'a jamais intérêt à
+          se faire passer pour un loup.
         </p>
         <p className="mb-3">
           C'est volontaire. Aucune application web ne peut empêcher une capture
           d'écran — et même si elle le pouvait, il suffirait de photographier
           l'écran avec un autre téléphone. Plutôt que d'essayer d'empêcher la
           capture, on la rend <strong>sans valeur</strong> : puisque n'importe qui
-          peut produire n'importe quelle preuve, montrer son écran ne prouve
-          plus rien.
+          peut produire une carte Villageois, en montrer une ne prouve plus rien.
         </p>
         <p className="text-gray-400 text-sm">
           Autrement dit : ne perdez pas votre temps à réclamer une capture, et

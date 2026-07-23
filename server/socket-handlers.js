@@ -168,12 +168,6 @@ function sendPlayerStateSync(socket, player) {
       .all();
   }
 
-  // Sent to EVERY player, not just wolves. The number of wolves is public —
-  // it is announced when the game starts — and the role card needs it to
-  // build a decoy pack of the right size (see client/src/utils/fakePack.js).
-  const wolfCount = gameStatus === 'setup'
-    ? 0
-    : db.prepare("SELECT COUNT(*) AS count FROM players WHERE role = 'wolf'").get().count;
 
   const syncedPlayer = {
     id: player.id,
@@ -197,7 +191,6 @@ function sendPlayerStateSync(socket, player) {
     players,
     timerState,
     wolves,
-    wolfCount,
   });
 }
 

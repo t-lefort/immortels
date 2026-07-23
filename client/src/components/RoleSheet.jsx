@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePlayer } from '../contexts/PlayerContext.jsx';
-import { buildFakePack } from '../utils/fakePack.js';
 
 /**
  * "Ma carte" — the only place a player can look at their role after the
@@ -22,10 +21,23 @@ import { buildFakePack } from '../utils/fakePack.js';
  * screenshot UI typically takes over.
  */
 
+/**
+ * Only the villager card can be faked, and that is deliberate.
+ *
+ * A fake wolf card would have to invent a pack, and an invented pack cannot
+ * stay consistent for the whole game: a screenshot taken on day one freezes
+ * its names while the village keeps learning roles, so the day one of those
+ * names is publicly cleared as a villager, that old screenshot proves its
+ * holder was never a wolf. The decoy would end up betraying exactly the
+ * people it was meant to protect.
+ *
+ * Dropping it costs nothing — nobody needs to pretend to be a wolf — and the
+ * mechanism still works: a villager card proves nothing, because a wolf can
+ * show the very same one.
+ */
 const MODES = [
   { value: 'real', label: 'Mon rôle' },
   { value: 'villager', label: 'Villageois' },
-  { value: 'wolf', label: 'Loup' },
 ];
 
 export default function RoleSheet() {
@@ -47,7 +59,7 @@ export default function RoleSheet() {
 }
 
 function RoleSheetModal({ onClose }) {
-  const { player, players, wolves, wolfCount } = usePlayer();
+  const { player, wolves } = usePlayer();
   const [mode, setMode] = useState('real');
   const [holding, setHolding] = useState(false);
   const holdTimer = useRef(null);
@@ -84,20 +96,13 @@ function RoleSheetModal({ onClose }) {
     holdTimer.current = setTimeout(() => setHolding(true), 120);
   }
 
+  // 'villager' is the only fake mode, so a wolf card is always genuine and
+  // always carries the real pack.
   const displayedRole = mode === 'real' ? player?.role : mode;
   const isWolf = displayedRole === 'wolf';
-
-  // A wolf card always carries a pack, so a faked one must carry a decoy —
-  // otherwise a pack-less Loup card would prove the holder is a villager.
-  // See utils/fakePack.js for the constraints the decoy has to satisfy.
-  const showingRealWolfCard = mode === 'real' && player?.role === 'wolf';
-  const pack = useMemo(() => {
-    if (!isWolf) return [];
-    if (showingRealWolfCard) {
-      return wolves.filter(w => w.id !== player?.id).map(w => w.name);
-    }
-    return buildFakePack({ selfId: player?.id, players, wolfCount });
-  }, [isWolf, showingRealWolfCard, wolves, players, wolfCount, player?.id]);
+  const pack = isWolf
+    ? wolves.filter(w => w.id !== player?.id).map(w => w.name)
+    : [];
 
   return (
     <div className="fixed inset-0 z-[60] bg-background flex flex-col">
@@ -153,8 +158,8 @@ function RoleSheetModal({ onClose }) {
               ))}
             </div>
             <p className="text-gray-600 text-[11px] text-center mt-3 leading-relaxed">
-              Tout le monde peut afficher la carte de son choix : une capture
-              d'écran ne prouve donc rien.
+              Tout le monde peut afficher une carte Villageois, qu'il le soit
+              ou non : une capture d'écran ne prouve donc rien.
             </p>
           </div>
 
