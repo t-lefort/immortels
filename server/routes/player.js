@@ -250,12 +250,22 @@ router.get('/me', requirePlayer, (req, res) => {
   if (gameStatus !== 'finished') {
     delete responsePlayer.score;
   }
+  // Never expose credentials to the client
+  delete responsePlayer.password_hash;
+  delete responsePlayer.username;
+
+  // Public information (announced at game start) — the role card needs it to
+  // size its decoy pack, so every player gets it, not just wolves.
+  const wolfCount = gameStatus === 'setup'
+    ? 0
+    : getDb().prepare("SELECT COUNT(*) AS count FROM players WHERE role = 'wolf'").get().count;
 
   res.json({
     ...responsePlayer,
     gameStatus,
     currentPhase,
     hasVoted,
+    wolfCount,
   });
 });
 

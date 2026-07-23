@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePlayer } from '../contexts/PlayerContext.jsx';
+import { buildFakePack } from '../utils/fakePack.js';
 
 /**
  * "Ma carte" — the only place a player can look at their role after the
@@ -46,7 +47,7 @@ export default function RoleSheet() {
 }
 
 function RoleSheetModal({ onClose }) {
-  const { player, wolves } = usePlayer();
+  const { player, players, wolves, wolfCount } = usePlayer();
   const [mode, setMode] = useState('real');
   const [holding, setHolding] = useState(false);
   const holdTimer = useRef(null);
@@ -85,9 +86,18 @@ function RoleSheetModal({ onClose }) {
 
   const displayedRole = mode === 'real' ? player?.role : mode;
   const isWolf = displayedRole === 'wolf';
-  // The pack only makes sense on a genuine wolf card. Showing it on a faked
-  // one would be a tell, and inventing names would be worse.
-  const showPack = mode === 'real' && player?.role === 'wolf' && wolves.length > 0;
+
+  // A wolf card always carries a pack, so a faked one must carry a decoy —
+  // otherwise a pack-less Loup card would prove the holder is a villager.
+  // See utils/fakePack.js for the constraints the decoy has to satisfy.
+  const showingRealWolfCard = mode === 'real' && player?.role === 'wolf';
+  const pack = useMemo(() => {
+    if (!isWolf) return [];
+    if (showingRealWolfCard) {
+      return wolves.filter(w => w.id !== player?.id).map(w => w.name);
+    }
+    return buildFakePack({ selfId: player?.id, players, wolfCount });
+  }, [isWolf, showingRealWolfCard, wolves, players, wolfCount, player?.id]);
 
   return (
     <div className="fixed inset-0 z-[60] bg-background flex flex-col">
@@ -97,7 +107,7 @@ function RoleSheetModal({ onClose }) {
         <RoleCard
           isWolf={isWolf}
           playerName={player?.name}
-          pack={showPack ? wolves.filter(w => w.id !== player?.id).map(w => w.name) : []}
+          pack={pack}
           onRelease={stopHolding}
         />
       ) : (

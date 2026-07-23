@@ -44,6 +44,12 @@ const sections = [
           réelle d'une carte truquée.
         </p>
         <p className="mb-3">
+          <strong className="text-amber-400">Y compris la meute :</strong> une fausse
+          carte Loup affiche elle aussi une liste de complices, du bon nombre et
+          cohérente avec ce que le village sait déjà. La présence d'une meute
+          n'atteste donc rien du tout.
+        </p>
+        <p className="mb-3">
           C'est volontaire. Aucune application web ne peut empêcher une capture
           d'écran — et même si elle le pouvait, il suffirait de photographier
           l'écran avec un autre téléphone. Plutôt que d'essayer d'empêcher la
