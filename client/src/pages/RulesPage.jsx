@@ -16,12 +16,44 @@ const sections = [
           Au début de la partie, chaque joueur reçoit secrètement un rôle :
           <strong className="text-red-400"> Loup</strong> ou
           <strong className="text-blue-400"> Villageois</strong>.
-          Le rôle est affiché une seule fois sur votre téléphone — retenez-le bien !
+          Vous pouvez le consulter à tout moment via <strong>« Ma carte »</strong>.
         </p>
         <p>
           Le jeu alterne entre des <strong>phases de nuit</strong> et des
           <strong> conseils du village</strong>. Les loups tentent d'éliminer
           les villageois, et les villageois tentent d'identifier et d'éliminer les loups.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'ma-carte',
+    title: 'Ma carte — et pourquoi une capture d\'écran ne prouve rien',
+    color: 'text-amber-400',
+    borderColor: 'border-amber-900/40',
+    content: (
+      <>
+        <p className="mb-3">
+          Le bouton <strong>« Ma carte »</strong> affiche votre rôle tant que vous
+          gardez le doigt appuyé. Dès que vous relâchez, la carte disparaît.
+        </p>
+        <p className="mb-3">
+          <strong className="text-amber-400">Le point important :</strong> chacun peut
+          y afficher <strong>la carte de son choix</strong>. Un villageois peut montrer
+          « Loup », un loup peut montrer « Villageois ». Rien ne distingue une carte
+          réelle d'une carte truquée.
+        </p>
+        <p className="mb-3">
+          C'est volontaire. Aucune application web ne peut empêcher une capture
+          d'écran — et même si elle le pouvait, il suffirait de photographier
+          l'écran avec un autre téléphone. Plutôt que d'essayer d'empêcher la
+          capture, on la rend <strong>sans valeur</strong> : puisque n'importe qui
+          peut produire n'importe quelle preuve, montrer son écran ne prouve
+          plus rien.
+        </p>
+        <p className="text-gray-400 text-sm">
+          Autrement dit : ne perdez pas votre temps à réclamer une capture, et
+          n'accordez aucun crédit à celles qu'on vous montre. Débattez.
         </p>
       </>
     ),
@@ -38,7 +70,7 @@ const sections = [
           <ul className="text-gray-300 space-y-1 text-sm">
             <li>- Vote chaque nuit pour éliminer un villageois</li>
             <li>- Peut communiquer discrètement avec les autres loups entre les phases de jeu</li>
-            <li>- Connaît l'identité des autres loups lors de la révélation du rôle. Retenez bien qui sont vos alliés ou allez discretement redemander au maitre du jeu.</li>
+            <li>- Connaît l'identité des autres loups lors de la révélation du rôle, et peut la revoir à tout moment via « Ma carte »</li>
           </ul>
         </div>
         <div className="bg-blue-900/20 border border-blue-900/40 rounded-lg p-4">
@@ -65,7 +97,7 @@ const sections = [
         <ul className="space-y-2 text-gray-300 text-sm mb-3">
           <li>
             <strong className="text-red-400">Les loups</strong> choisissent un joueur vivant
-            (hors loups) à éliminer. La majorité l'emporte. Si égalité, tirage au sort parmi les ex-æquo.
+            à éliminer. La majorité l'emporte. Si égalité, tirage au sort parmi les ex-æquo.
           </li>
           <li>
             <strong className="text-blue-400">Les villageois</strong> choisissent un joueur
@@ -76,6 +108,13 @@ const sections = [
             un joueur vivant (voir section Fantômes).
           </li>
         </ul>
+        <p className="text-gray-400 text-sm mb-3">
+          <strong className="text-gray-300">Tout le monde voit exactement la même liste</strong> :
+          tous les joueurs vivants sauf soi-même. Impossible de deviner un rôle en
+          regardant l'écran du voisin. En contrepartie, un loup qui vote pour un
+          autre loup perd son vote — il n'est pas comptabilisé, et rien ne vous
+          prévient. À vous de retenir votre meute (« Ma carte » vous la rappelle).
+        </p>
         <p className="text-gray-400 text-sm">
           Le vote est définitif — pas de retour en arrière après confirmation.
           L'admin peut forcer la clôture des votes si un joueur ne répond pas.

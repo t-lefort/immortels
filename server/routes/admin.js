@@ -960,6 +960,92 @@ router.post('/challenge', (req, res) => {
   res.json({ challenge, scoreChanges });
 });
 
+/**
+ * PUT /challenge/:id/winners { winningPlayerIds }
+ *
+ * Records (or corrects) the winning team of an épreuve. Only the difference
+ * with the previously stored team is scored, so fixing a mistake doesn't
+ * double-award anyone or leave a stale point behind.
+ */
+router.put('/challenge/:id/winners', (req, res) => {
+  const { winningPlayerIds } = req.body;
+  const challengeId = Number(req.params.id);
+
+  if (!Array.isArray(winningPlayerIds)) {
+    return res.status(400).json({ error: 'winningPlayerIds doit être un tableau' });
+  }
+
+  const db = getDb();
+  const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(challengeId);
+  if (!challenge) {
+    return res.status(404).json({ error: 'Épreuve introuvable' });
+  }
+
+  const nextIds = [...new Set(winningPlayerIds.map(Number))];
+  if (nextIds.some(id => !Number.isInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont invalides' });
+  }
+
+  const getPlayer = db.prepare('SELECT id, name FROM players WHERE id = ?');
+  const missing = nextIds.filter(id => !getPlayer.get(id));
+  if (missing.length > 0) {
+    return res.status(400).json({ error: 'Un ou plusieurs gagnants sont introuvables' });
+  }
+
+  let previousIds = [];
+  try {
+    const parsed = JSON.parse(challenge.winning_team_player_ids || '[]');
+    previousIds = Array.isArray(parsed) ? [...new Set(parsed.map(Number))] : [];
+  } catch {
+    previousIds = [];
+  }
+
+  const added = nextIds.filter(id => !previousIds.includes(id));
+  const removed = previousIds.filter(id => !nextIds.includes(id));
+
+  const scoreChanges = [];
+
+  if (added.length > 0 || removed.length > 0) {
+    recordScoreSnapshot('challenge_winners_updated', {
+      challengeId,
+      added,
+      removed,
+    });
+  }
+
+  const updateScore = db.prepare('UPDATE players SET score = score + ? WHERE id = ?');
+
+  db.transaction(() => {
+    db.prepare('UPDATE challenges SET winning_team_player_ids = ? WHERE id = ?')
+      .run(JSON.stringify(nextIds), challengeId);
+
+    for (const [ids, delta, reason] of [
+      [added, 1, 'challenge_winner'],
+      [removed, -1, 'challenge_winner_removed'],
+    ]) {
+      for (const playerId of ids) {
+        const player = getPlayer.get(playerId);
+        if (!player) continue;
+        updateScore.run(delta, playerId);
+        recordScoreEvent({
+          playerId,
+          sourceType: 'challenge',
+          sourceId: challengeId,
+          reason,
+          delta,
+          metadata: { challengeName: challenge.name },
+        }, db);
+        scoreChanges.push({ playerId, playerName: player.name, delta, reason });
+      }
+    }
+  })();
+
+  logger.score('Challenge winners updated', { challengeId, added: added.length, removed: removed.length });
+
+  const updated = db.prepare('SELECT * FROM challenges WHERE id = ?').get(challengeId);
+  res.json({ challenge: updated, scoreChanges });
+});
+
 router.post('/challenge/assign', (req, res) => {
   const { challengeId, playerId } = req.body;
 
