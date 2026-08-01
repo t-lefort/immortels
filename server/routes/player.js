@@ -22,7 +22,7 @@ import {
 } from '../game-engine.js';
 import {
   emitToAll,
-  computeVoteCounts,
+  buildVoteUpdate,
 } from '../socket-rooms.js';
 import {
   processProtecteurResponse,
@@ -260,6 +260,87 @@ router.get('/me', requirePlayer, (req, res) => {
     currentPhase,
     hasVoted,
   });
+});
+
+/**
+ * GET /api/player/profile
+ * Account details for the profile screen. The password is never echoed back —
+ * only whether one has been set.
+ */
+router.get('/profile', requirePlayer, (req, res) => {
+  const player = req.player;
+  res.json({
+    id: player.id,
+    name: player.name,
+    username: player.username,
+    firstName: player.first_name,
+    lastName: player.last_name,
+    hasPassword: !!player.password_hash,
+  });
+});
+
+/**
+ * PUT /api/player/profile { username }
+ * Change the login pseudo. The display name is deliberately not editable here:
+ * every other player identifies you by it during the game, and renaming
+ * yourself mid-game would be a free disguise.
+ */
+router.put('/profile', requirePlayer, (req, res) => {
+  const player = req.player;
+  const { username } = req.body || {};
+
+  const error = validateUsername(username);
+  if (error) return res.status(400).json({ error });
+
+  const normalized = normalizeUsername(username);
+  if (normalized === player.username) {
+    return res.json({ updated: false, username: normalized });
+  }
+
+  const db = getDb();
+  const taken = db
+    .prepare('SELECT id FROM players WHERE username = ? AND id != ?')
+    .get(normalized, player.id);
+  if (taken) return res.status(409).json({ error: 'Ce pseudo est déjà utilisé.' });
+
+  db.prepare('UPDATE players SET username = ? WHERE id = ?').run(normalized, player.id);
+  logger.auth('Username changed', { playerId: player.id, username: normalized });
+
+  res.json({ updated: true, username: normalized });
+});
+
+/**
+ * PUT /api/player/password { currentPassword, newPassword }
+ * The current password is required unless the account never had one (an
+ * account the admin pre-created and the player has not finished claiming).
+ */
+router.put('/password', requirePlayer, (req, res) => {
+  const player = req.player;
+  const { currentPassword, newPassword } = req.body || {};
+
+  if (player.password_hash && !verifyPassword(String(currentPassword || ''), player.password_hash)) {
+    return res.status(401).json({ error: 'Mot de passe actuel incorrect.' });
+  }
+
+  const error = validatePassword(newPassword);
+  if (error) return res.status(400).json({ error });
+
+  getDb()
+    .prepare('UPDATE players SET password_hash = ? WHERE id = ?')
+    .run(hashPassword(newPassword), player.id);
+  logger.auth('Password changed', { playerId: player.id });
+
+  res.json({ updated: true });
+});
+
+/**
+ * POST /api/player/logout
+ * Drops the session token so the phone goes back to the login screen.
+ */
+router.post('/logout', requirePlayer, (req, res) => {
+  getDb().prepare('UPDATE players SET session_token = NULL WHERE id = ?').run(req.player.id);
+  res.clearCookie('session_token');
+  res.json({ loggedOut: true });
 });
 
 /**
@@ -632,24 +713,15 @@ router.post('/special-respond', requirePlayer, (req, res) => {
 });
 
 /**
- * Emit a phase:vote_update event with current vote counts.
- * Uses the shared computeVoteCounts helper from socket-rooms.
- * Counts combine wolf + villager_guess for night (shared counter),
- * or village for council.
+ * Emit a phase:vote_update event with current vote counts and the alive
+ * players still missing. Counts combine wolf + villager_guess for night
+ * (shared counter), or village for council.
  */
 function emitVoteUpdate(io, currentPhase) {
   if (!io || !currentPhase) return;
 
-  const { voteCount, totalExpected } = computeVoteCounts(currentPhase.id, currentPhase.type);
-
-  const payload = {
-    phaseId: currentPhase.id,
-    voteCount,
-    totalExpected,
-  };
-
   // Broadcast to all clients (players, dashboard, admin)
-  emitToAll(io, 'phase:vote_update', payload);
+  emitToAll(io, 'phase:vote_update', buildVoteUpdate(currentPhase.id, currentPhase.type));
 }
 
 export default router;

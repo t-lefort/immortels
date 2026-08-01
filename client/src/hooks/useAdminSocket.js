@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { useLiveSync } from './useLiveSync.js';
 
 /**
  * Socket.IO hook for the admin interface.
@@ -94,6 +95,9 @@ export function useAdminSocket() {
     connect();
     return () => disconnect();
   }, [connect, disconnect]);
+
+  // Admin phone locks between phases like everyone else's.
+  useLiveSync(() => socketRef.current);
 
   return { connected, lastEvent, on, connect, disconnect };
 }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { usePlayerSocket } from '../hooks/usePlayerSocket.js';
+import { useLiveSync } from '../hooks/useLiveSync.js';
 import * as playerApi from '../services/playerApi.js';
 import { useToast } from './ToastContext.jsx';
 import { initSessionOverride, getOverrideToken } from '../services/sessionOverride.js';
@@ -49,7 +50,15 @@ export function PlayerProvider({ children }) {
   // setPlayer() call (which would cause event listener churn and lost events).
   const playerLoggedIn = !!player?.id;
 
-  const { connected, on, connect, disconnect } = usePlayerSocket();
+  const { connected, on, connect, disconnect, getSocket } = usePlayerSocket();
+
+  // A locked phone is the normal state of a player between two phases: the tab
+  // must catch up the moment it is looked at again, without a manual reload.
+  // The page-reload fallback is held back while a vote is open — a reload there
+  // would throw away a selection the player has not confirmed yet.
+  useLiveSync(getSocket, {
+    canReload: () => currentPhase?.status !== 'voting',
+  });
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -318,6 +327,14 @@ export function PlayerProvider({ children }) {
         if (data.players) {
           setPlayers(data.players);
         }
+      }),
+
+      // Admin revoked this session (wrong phone, account handed over).
+      on('session:revoked', () => {
+        setPlayer(null);
+        setLoading(false);
+        setError('Session fermée par l\'administrateur. Reconnectez-vous.');
+        disconnect();
       }),
 
       on('game:reset', () => {

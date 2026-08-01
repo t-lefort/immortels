@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import PendingVoters from './PendingVoters.jsx';
 
 /**
  * NightDisplay — Night overlay displayed on top of GameDisplay.
@@ -150,6 +151,12 @@ export default function NightDisplay({ currentPhase, voteProgress }) {
             animationFillMode: 'both',
           }}
         >
+          {/* Anchored by its bottom edge, so the list of missing players grows
+              upward into the empty sky rather than off the bottom of the screen. */}
+          <div className="mb-[2vh]">
+            <PendingVoters pending={voteProgress.pending} accent="#6a7fdb" />
+          </div>
+
           <div className="text-center mb-[1vh]">
             <span
               className="text-gray-300 font-medium animate-votePulse"

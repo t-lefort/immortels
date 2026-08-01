@@ -4,6 +4,14 @@ import { adminAuth } from '../middleware/auth.js';
 import { getDb, getAllSettings, getSetting, setSetting, resetGame } from '../db.js';
 import logger from '../logger.js';
 import { hasSpecialRole, addSpecialRole, parseSpecialRoles } from '../role-helpers.js';
+import {
+  hashPassword,
+  normalizeUsername,
+  validateUsername,
+  validatePassword,
+  cleanNamePart,
+  buildDisplayName,
+} from '../auth-helpers.js';
 import { recordScoreSnapshot, listScoreSnapshots } from '../score-snapshots.js';
 import { recordScoreEvent, listScoreEvents } from '../score-events.js';
 import { removeSpecialRole } from '../role-helpers.js';
@@ -46,9 +54,9 @@ import {
   emitToAdmin,
   emitToDashboard,
   updatePlayerRooms,
-  computeVoteCounts,
+  buildVoteUpdate,
 } from '../socket-rooms.js';
-import { resyncPlayer } from '../socket-handlers.js';
+import { resyncPlayer, resyncAdmin, resyncDashboard } from '../socket-handlers.js';
 import {
   handleProtecteur,
   processProtecteurResponse,
@@ -320,8 +328,7 @@ router.post('/phase/start', (req, res) => {
       emitToAdmin(io, 'phase:started', { phase, phaseType: phase.type });
 
       // Send initial vote progress so dashboard shows "0/N" instead of "0/0"
-      const { voteCount, totalExpected } = computeVoteCounts(phase.id, phase.type);
-      emitToAll(io, 'phase:vote_update', { phaseId: phase.id, voteCount, totalExpected });
+      emitToAll(io, 'phase:vote_update', buildVoteUpdate(phase.id, phase.type));
     }
 
     // For night phases, automatically open voting (no separate step needed)
@@ -1449,6 +1456,18 @@ router.put('/settings', (req, res) => {
   for (const [key, value] of Object.entries(updates)) {
     setSetting(key, value);
   }
+
+  // The settings tab is where the admin repairs a stuck game (game_status,
+  // current_phase_id...). Those keys drive every screen, so push the new state
+  // out instead of leaving the interfaces on whatever they last believed.
+  const io = req.app.get('io');
+  if (io && Object.keys(updates).length > 0) {
+    resyncAdmin(io);
+    resyncDashboard(io);
+    const players = getDb().prepare('SELECT id FROM players').all();
+    for (const p of players) resyncPlayer(io, p.id);
+  }
+
   res.json(getAllSettings());
 });
 
@@ -1503,9 +1522,16 @@ router.post('/game/import', (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      // Every client must rebuild from scratch — the game they were showing
-      // no longer exists. game:reset sends players back to the login screen.
-      emitToAll(io, 'game:reset', {});
+      // Players must rebuild from scratch: the session tokens they hold belong
+      // to the game that was just overwritten, so game:reset sends them back to
+      // the login screen.
+      //
+      // Admin and dashboard get a real state:sync instead. Sending them
+      // game:reset used to pin their UI to "Configuration" no matter what the
+      // imported game_status actually said, and nothing ever corrected it.
+      io.except('admin').except('dashboard').emit('game:reset', {});
+      resyncAdmin(io);
+      resyncDashboard(io);
     }
 
     res.json({ imported: true, counts });
@@ -1542,6 +1568,174 @@ router.delete('/archives/:id', (req, res) => {
     return res.status(404).json({ error: 'Archive introuvable' });
   }
   res.json({ deleted: true, id: Number(req.params.id) });
+});
+
+// ─── Accounts ───────────────────────────────────────────────────────────────
+
+/**
+ * Everything the admin needs to repair a login without ever seeing a password:
+ * who claimed which pseudo, who never finished signing up, and who is still
+ * holding a live session.
+ */
+router.get('/accounts', (_req, res) => {
+  const rows = getDb()
+    .prepare(`
+      SELECT id, name, username, first_name, last_name, status,
+             password_hash IS NOT NULL AS has_password,
+             session_token IS NOT NULL AS has_session
+      FROM players ORDER BY name
+    `)
+    .all();
+
+  res.json(rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    status: row.status,
+    hasPassword: !!row.has_password,
+    hasSession: !!row.has_session,
+  })));
+});
+
+/**
+ * PUT /accounts/:id { username, firstName, lastName }
+ * Rename an account. Changing first/last name rebuilds the display name used
+ * everywhere in the game, so the two can never drift apart.
+ */
+router.put('/accounts/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const db = getDb();
+  const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
+  if (!player) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  const { username, firstName, lastName } = req.body || {};
+  const updates = {};
+
+  if (username !== undefined) {
+    // An empty string releases the pseudo: the player can then claim a new one.
+    if (username === null || String(username).trim() === '') {
+      updates.username = null;
+    } else {
+      const error = validateUsername(username);
+      if (error) return res.status(400).json({ error });
+      const normalized = normalizeUsername(username);
+      const taken = db.prepare('SELECT id FROM players WHERE username = ? AND id != ?').get(normalized, id);
+      if (taken) return res.status(409).json({ error: 'Ce pseudo est déjà utilisé.' });
+      updates.username = normalized;
+    }
+  }
+
+  if (firstName !== undefined || lastName !== undefined) {
+    const cleanFirst = firstName !== undefined ? cleanNamePart(firstName) : player.first_name;
+    const cleanLast = lastName !== undefined ? cleanNamePart(lastName) : player.last_name;
+    const displayName = buildDisplayName(cleanFirst, cleanLast);
+    if (!displayName) {
+      return res.status(400).json({ error: 'Le prénom et le nom ne peuvent pas être vides tous les deux.' });
+    }
+    if (displayName.length > 50) {
+      return res.status(400).json({ error: 'Le nom complet ne peut pas dépasser 50 caractères.' });
+    }
+    const nameTaken = db.prepare('SELECT id FROM players WHERE name = ? AND id != ?').get(displayName, id);
+    if (nameTaken) return res.status(409).json({ error: 'Un autre joueur porte déjà ce nom.' });
+
+    updates.first_name = cleanFirst;
+    updates.last_name = cleanLast;
+    updates.name = displayName;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
+  }
+
+  const setClauses = Object.keys(updates).map(f => `${f} = ?`).join(', ');
+  db.prepare(`UPDATE players SET ${setClauses} WHERE id = ?`).run(...Object.values(updates), id);
+
+  logger.auth('Account updated by admin', { playerId: id, fields: Object.keys(updates) });
+
+  const io = req.app.get('io');
+  if (io) {
+    resyncPlayer(io, id);
+    const allPlayers = db.prepare('SELECT id, name, status, special_role FROM players ORDER BY id').all();
+    const lobbyData = { playerCount: allPlayers.length, players: allPlayers };
+    emitToAdmin(io, 'lobby:update', lobbyData);
+    emitToDashboard(io, 'lobby:update', lobbyData);
+    emitToAll(io, 'lobby:update', lobbyData);
+  }
+
+  res.json({ updated: true, id });
+});
+
+/**
+ * POST /accounts/:id/password { password }
+ * Set a password for a player who lost theirs. Omitting `password` clears it
+ * instead: the next login then sets whatever the player types, which is how
+ * pre-registered accounts already work.
+ */
+router.post('/accounts/:id/password', (req, res) => {
+  const id = Number(req.params.id);
+  const db = getDb();
+  const player = db.prepare('SELECT id FROM players WHERE id = ?').get(id);
+  if (!player) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  const { password } = req.body || {};
+
+  if (password === undefined || password === null || password === '') {
+    db.prepare('UPDATE players SET password_hash = NULL WHERE id = ?').run(id);
+    logger.auth('Password cleared by admin', { playerId: id });
+    return res.json({ cleared: true, id });
+  }
+
+  const error = validatePassword(password);
+  if (error) return res.status(400).json({ error });
+
+  db.prepare('UPDATE players SET password_hash = ? WHERE id = ?').run(hashPassword(password), id);
+  logger.auth('Password reset by admin', { playerId: id });
+  res.json({ updated: true, id });
+});
+
+/**
+ * DELETE /accounts/:id/session
+ * Force-logout: invalidates the token on the player's phone. Used when someone
+ * is logged in on a device that is not theirs.
+ */
+router.delete('/accounts/:id/session', (req, res) => {
+  const id = Number(req.params.id);
+  const db = getDb();
+  const player = db.prepare('SELECT id FROM players WHERE id = ?').get(id);
+  if (!player) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  db.prepare('UPDATE players SET session_token = NULL WHERE id = ?').run(id);
+  logger.auth('Session revoked by admin', { playerId: id });
+
+  const io = req.app.get('io');
+  if (io) emitToPlayer(io, id, 'session:revoked', {});
+
+  res.json({ revoked: true, id });
+});
+
+/**
+ * DELETE /accounts/:id
+ * Detach the account from the player row: credentials are wiped but the player
+ * (and their score, votes, role) stays in the game, ready to be claimed again
+ * under the same display name.
+ */
+router.delete('/accounts/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const db = getDb();
+  const player = db.prepare('SELECT id FROM players WHERE id = ?').get(id);
+  if (!player) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  db.prepare(
+    'UPDATE players SET username = NULL, password_hash = NULL, session_token = NULL WHERE id = ?'
+  ).run(id);
+  logger.auth('Account detached by admin', { playerId: id });
+
+  const io = req.app.get('io');
+  if (io) emitToPlayer(io, id, 'session:revoked', {});
+
+  res.json({ detached: true, id });
 });
 
 // ─── Force Vote ─────────────────────────────────────────────────────────────
@@ -1599,12 +1793,7 @@ router.post('/force-vote', (req, res) => {
     // Emit vote update with counts (same as normal vote flow)
     const io = req.app.get('io');
     if (io) {
-      const { voteCount, totalExpected } = computeVoteCounts(phase.id, phase.type);
-      emitToAll(io, 'phase:vote_update', {
-        phaseId: phase.id,
-        voteCount,
-        totalExpected,
-      });
+      emitToAll(io, 'phase:vote_update', buildVoteUpdate(phase.id, phase.type));
 
       // Re-sync the affected player so their UI shows the vote was submitted
       resyncPlayer(io, Number(voterId));

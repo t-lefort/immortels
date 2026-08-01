@@ -23,13 +23,9 @@ export default function PlayersTab({ players, refreshPlayers }) {
   const [editData, setEditData] = useState({});
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { incognito, toggleIncognito } = useIncognito();
-  // Rows the admin explicitly revealed while incognito stays on
-  const [peeked, setPeeked] = useState(() => new Set());
-
-  function peek(id) {
-    setPeeked(prev => new Set(prev).add(id));
-  }
+  // `peeked` lives in the incognito store: rows revealed one by one must be
+  // re-masked as soon as the mode is switched, on every tab at once.
+  const { incognito, toggleIncognito, isPeeked, togglePeek } = useIncognito();
 
   // Alive players first — they are the ones the admin acts on during a phase.
   // Ties keep the original id order so rows don't jump around between renders.
@@ -208,30 +204,31 @@ export default function PlayersTab({ players, refreshPlayers }) {
                   <>
                     <td className="px-3 py-2 text-gray-500">{p.id}</td>
                     <td className="px-3 py-2 text-white font-medium">{p.name}</td>
+                    {/* Masked for every row, including the ones with nothing to
+                        hide: a "--" standing out among the dots would name the
+                        players holding a special role. */}
                     <td className="px-3 py-2">
-                      {p.role ? (
-                        <HiddenRole
-                          incognito={incognito}
-                          peeked={peeked.has(p.id)}
-                          onPeek={() => peek(p.id)}
-                        >
+                      <HiddenRole
+                        incognito={incognito}
+                        peeked={isPeeked(p.id)}
+                        onPeek={() => togglePeek(p.id)}
+                      >
+                        {p.role ? (
                           <span className={`px-1.5 py-0.5 rounded text-xs ${
                             p.role === 'wolf' ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'
                           }`}>
                             {p.role === 'wolf' ? 'Loup' : 'Villageois'}
                           </span>
-                        </HiddenRole>
-                      ) : (
-                        <span className="text-gray-600">--</span>
-                      )}
+                        ) : null}
+                      </HiddenRole>
                     </td>
                     <td className="px-3 py-2">
-                      {p.special_role ? (
-                        <HiddenRole
-                          incognito={incognito}
-                          peeked={peeked.has(p.id)}
-                          onPeek={() => peek(p.id)}
-                        >
+                      <HiddenRole
+                        incognito={incognito}
+                        peeked={isPeeked(p.id)}
+                        onPeek={() => togglePeek(p.id)}
+                      >
+                        {p.special_role ? (
                           <span className="flex flex-wrap gap-1">
                             {parseRoles(p.special_role).map(r => (
                               <span key={r} className="px-1.5 py-0.5 rounded text-xs bg-purple-900/50 text-purple-300">
@@ -239,10 +236,8 @@ export default function PlayersTab({ players, refreshPlayers }) {
                               </span>
                             ))}
                           </span>
-                        </HiddenRole>
-                      ) : (
-                        <span className="text-gray-600">--</span>
-                      )}
+                        ) : null}
+                      </HiddenRole>
                     </td>
                     <td className="px-3 py-2">
                       <span className={`px-1.5 py-0.5 rounded text-xs ${

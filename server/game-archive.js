@@ -196,38 +196,52 @@ export function archiveGame(label) {
   const cleanLabel = String(label || '').trim()
     || `Partie du ${new Date().toLocaleDateString('fr-FR')}`;
 
-  const result = db.prepare(
-    'INSERT INTO archived_games (label, winner, data_json) VALUES (?, ?, ?)'
-  ).run(cleanLabel, settings.game_winner || null, JSON.stringify(snapshot));
+  const gameStatus = settings.game_status || 'finished';
 
-  logger.game('Game archived', { archiveId: Number(result.lastInsertRowid), label: cleanLabel, playerCount });
+  const result = db.prepare(
+    'INSERT INTO archived_games (label, winner, game_status, data_json) VALUES (?, ?, ?, ?)'
+  ).run(cleanLabel, settings.game_winner || null, gameStatus, JSON.stringify(snapshot));
+
+  logger.game('Game archived', {
+    archiveId: Number(result.lastInsertRowid),
+    label: cleanLabel,
+    playerCount,
+    gameStatus,
+  });
   return getArchive(Number(result.lastInsertRowid));
 }
 
 /**
  * List archives without their payload (cheap enough to poll).
+ *
+ * `finishedOnly` is what the player-facing endpoints pass: a mid-game safety
+ * archive contains every role of the game in progress.
  */
-export function listArchives() {
+export function listArchives({ finishedOnly = false } = {}) {
+  const where = finishedOnly ? "WHERE game_status = 'finished'" : '';
   return getDb()
-    .prepare('SELECT id, label, winner, archived_at FROM archived_games ORDER BY id DESC')
+    .prepare(`SELECT id, label, winner, game_status, archived_at FROM archived_games ${where} ORDER BY id DESC`)
     .all()
     .map(row => ({
       id: row.id,
       label: row.label,
       winner: row.winner,
+      gameStatus: row.game_status,
       archivedAt: row.archived_at,
     }));
 }
 
 /**
  * Load one archive, parsed and shaped for display.
- * Returns null when the id doesn't exist.
+ * Returns null when the id doesn't exist, or when `finishedOnly` is set and
+ * the archive was taken mid-game.
  */
-export function getArchive(id) {
+export function getArchive(id, { finishedOnly = false } = {}) {
   const row = getDb()
     .prepare('SELECT * FROM archived_games WHERE id = ?')
     .get(Number(id));
   if (!row) return null;
+  if (finishedOnly && row.game_status !== 'finished') return null;
 
   let data;
   try {
@@ -241,6 +255,7 @@ export function getArchive(id) {
     id: row.id,
     label: row.label,
     winner: row.winner,
+    gameStatus: row.game_status,
     archivedAt: row.archived_at,
     ...buildArchiveView(data),
   };

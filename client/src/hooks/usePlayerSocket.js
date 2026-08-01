@@ -37,6 +37,7 @@ const EVENTS = [
   'speech:order',
   'lobby:update',
   'role:revealed',
+  'session:revoked',
   'socket:reconnected', // synthetic event
 ];
 
@@ -153,10 +154,14 @@ export function usePlayerSocket() {
     };
   }, []);
 
+  // Handed to useLiveSync by the provider, which is where the "is a vote in
+  // progress" answer lives.
+  const getSocket = useCallback(() => _socket, []);
+
   // NOTE: We intentionally do NOT disconnect on hook unmount.
   // The socket is a page-level singleton — it survives React re-mounts.
   // It is only torn down when disconnect() is explicitly called (e.g., game reset)
   // or when the page itself unloads.
 
-  return { connected, on, connect, disconnect };
+  return { connected, on, connect, disconnect, getSocket };
 }

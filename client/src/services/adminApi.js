@@ -261,6 +261,35 @@ export function deleteArchive(id) {
   return request(`/archives/${id}`, { method: 'DELETE' });
 }
 
+// ─── Accounts ───────────────────────────────────────────────────────────────
+
+export function getAccounts() {
+  return request('/accounts');
+}
+
+export function updateAccount(id, data) {
+  return request(`/accounts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Omit `password` to clear it: the player's next login then sets a new one. */
+export function setAccountPassword(id, password) {
+  return request(`/accounts/${id}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function revokeAccountSession(id) {
+  return request(`/accounts/${id}/session`, { method: 'DELETE' });
+}
+
+export function detachAccount(id) {
+  return request(`/accounts/${id}`, { method: 'DELETE' });
+}
+
 // ─── Overrides ──────────────────────────────────────────────────────────────
 
 export function updatePlayer(id, data) {
