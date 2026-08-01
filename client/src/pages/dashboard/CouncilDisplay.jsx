@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import PendingVoters from './PendingVoters.jsx';
 
 /**
  * CouncilDisplay — Village council overlay.
@@ -196,6 +197,10 @@ export default function CouncilDisplay({ currentPhase, speechOrder, speechComman
                   transition: 'width 0.5s ease-out',
                 }}
               />
+            </div>
+
+            <div className="mt-[3vh]">
+              <PendingVoters pending={voteProgress.pending} accent="#e0a030" />
             </div>
           </div>
         </div>

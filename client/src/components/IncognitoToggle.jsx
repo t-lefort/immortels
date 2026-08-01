@@ -32,12 +32,31 @@ export default function IncognitoToggle({ incognito, onToggle }) {
 }
 
 /**
- * A role value hidden behind incognito mode. Click to peek at a single row
- * without turning the whole screen back on.
+ * A role value hidden behind incognito mode. Tap to reveal a single row, tap
+ * again to hide it back.
+ *
+ * The masked placeholder is rendered even when `children` is empty: a row
+ * showing "--" next to rows showing a button would tell everyone which players
+ * hold a special role, which is exactly what incognito is there to prevent.
+ * Pass `empty` for the value to display once revealed in that case.
  */
-export function HiddenRole({ children, incognito, peeked, onPeek, className = '' }) {
-  if (!incognito || peeked) {
-    return <span className={className}>{children}</span>;
+export function HiddenRole({ children, incognito, peeked, onPeek, empty = null, className = '' }) {
+  const revealed = children ?? empty ?? <span className="text-gray-600">--</span>;
+
+  if (!incognito) {
+    return <span className={className}>{revealed}</span>;
+  }
+
+  if (peeked) {
+    return (
+      <button
+        onClick={onPeek}
+        title="Cliquer pour masquer"
+        className={`text-left ${className}`}
+      >
+        {revealed}
+      </button>
+    );
   }
 
   return (

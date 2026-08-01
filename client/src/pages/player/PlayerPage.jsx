@@ -19,6 +19,7 @@ import SorcierePrompt from './SorcierePrompt.jsx';
 import VoyantePrompt from './VoyantePrompt.jsx';
 import ChasseurPrompt from './ChasseurPrompt.jsx';
 import MayorSuccessionPrompt from './MayorSuccessionPrompt.jsx';
+import ProfileScreen from './ProfileScreen.jsx';
 
 /**
  * Main player page — state machine router.
@@ -41,6 +42,7 @@ export default function PlayerPage() {
 
   // Track if the player has seen the "eliminated" screen this session
   const [eliminatedAcknowledged, setEliminatedAcknowledged] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Role reveal is tracked server-side via player.role_seen
   const roleRevealDismissed = !!player?.role_seen;
@@ -251,9 +253,35 @@ export default function PlayerPage() {
     );
   }
 
+  const screenKey = getScreenKey();
+
+  // The profile is a distraction on the screens where the player has one thing
+  // to do — pick a target, read their role once — so the entry point only shows
+  // up on the screens where they are waiting anyway.
+  const PROFILE_SCREENS = ['lobby', 'waiting', 'waiting-council', 'phase-result', 'finished'];
+  const showProfileButton =
+    !!player && !specialPrompt && PROFILE_SCREENS.includes(screenKey);
+
   return (
-    <ScreenTransition screenKey={getScreenKey()}>
-      {renderScreen()}
-    </ScreenTransition>
+    <>
+      <ScreenTransition screenKey={screenKey}>
+        {renderScreen()}
+      </ScreenTransition>
+
+      {showProfileButton && !profileOpen && (
+        <button
+          onClick={() => setProfileOpen(true)}
+          aria-label="Mon profil"
+          className="fixed top-4 right-4 z-30 flex items-center gap-1.5 px-3 py-2 rounded-full
+                     bg-gray-900/90 border border-gray-800 text-gray-400 text-xs
+                     hover:text-gray-200 transition-colors"
+        >
+          <span aria-hidden="true">👤</span>
+          Profil
+        </button>
+      )}
+
+      {profileOpen && <ProfileScreen onClose={() => setProfileOpen(false)} />}
+    </>
   );
 }

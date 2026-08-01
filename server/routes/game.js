@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb, getSetting } from '../db.js';
-import { computeVoteCounts } from '../socket-rooms.js';
+import { requirePlayer } from '../middleware/session.js';
+import { computeVoteCounts, computePendingVoters } from '../socket-rooms.js';
 import { getScoreboard } from '../game-engine.js';
 import { listArchives, getArchive } from '../game-archive.js';
 
@@ -25,9 +26,10 @@ router.get('/state', (_req, res) => {
     .prepare('SELECT id, name, status, role, special_role FROM players ORDER BY id')
     .all();
 
-  let voteCount, totalExpected;
+  let voteCount, totalExpected, pendingVoters;
   if (currentPhase && (currentPhase.status === 'voting' || currentPhase.status === 'active')) {
     ({ voteCount, totalExpected } = computeVoteCounts(currentPhase.id, currentPhase.type));
+    pendingVoters = computePendingVoters(currentPhase.id, currentPhase.type);
   }
 
   res.json({
@@ -36,6 +38,7 @@ router.get('/state', (_req, res) => {
     players,
     voteCount,
     totalExpected,
+    pendingVoters,
   });
 });
 
@@ -78,30 +81,23 @@ router.get('/scoreboard', (_req, res) => {
 
 /**
  * GET /api/game/archives
- * List past games. Players may only browse archives once the current game is
- * over — during play this would leak roles from a game some of them replayed.
+ * Past games, browsable from a player's profile at any time.
+ *
+ * Only archives of *finished* games are exposed: the current game is never in
+ * this list, and a mid-game safety archive taken by the admin is filtered out
+ * (it would hand over every role of the game being played). A session is
+ * required so the list isn't public to anyone hitting the URL.
  */
-router.get('/archives', (_req, res) => {
-  if (getSetting('game_status') !== 'finished') {
-    return res.status(403).json({
-      error: 'Les parties précédentes sont consultables une fois la partie terminée.',
-    });
-  }
-  res.json(listArchives());
+router.get('/archives', requirePlayer, (_req, res) => {
+  res.json(listArchives({ finishedOnly: true }));
 });
 
 /**
  * GET /api/game/archives/:id
  * Full detail of one past game (phases, votes, scoreboard).
  */
-router.get('/archives/:id', (req, res) => {
-  if (getSetting('game_status') !== 'finished') {
-    return res.status(403).json({
-      error: 'Les parties précédentes sont consultables une fois la partie terminée.',
-    });
-  }
-
-  const archive = getArchive(req.params.id);
+router.get('/archives/:id', requirePlayer, (req, res) => {
+  const archive = getArchive(req.params.id, { finishedOnly: true });
   if (!archive) {
     return res.status(404).json({ error: 'Partie introuvable.' });
   }

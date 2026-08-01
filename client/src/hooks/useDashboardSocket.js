@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { useLiveSync } from './useLiveSync.js';
 
 /**
  * Socket.IO hook for the dashboard display.
@@ -19,7 +20,9 @@ export function useDashboardSocket() {
   const [playerCount, setPlayerCount] = useState(0);
 
   // Phase-specific state
-  const [voteProgress, setVoteProgress] = useState({ count: 0, total: 0 });
+  // `pending` lists the alive players who still owe a vote, so the projected
+  // screen can name them instead of only counting the missing ones.
+  const [voteProgress, setVoteProgress] = useState({ count: 0, total: 0, pending: [] });
   const [speechOrder, setSpeechOrder] = useState(null);
   // Admin-driven "next/prev speaker" command. seq increments on every command
   // so CouncilDisplay can apply each one exactly once (direction-based, since the
@@ -77,7 +80,11 @@ export function useDashboardSocket() {
         }
       }
       if (data.voteCount !== undefined && data.totalExpected !== undefined) {
-        setVoteProgress({ count: data.voteCount, total: data.totalExpected });
+        setVoteProgress({
+          count: data.voteCount,
+          total: data.totalExpected,
+          pending: data.pendingVoters || [],
+        });
       }
       // Recover timer state on reconnect
       if (data.timerState && data.timerState.remaining > 0) {
@@ -121,7 +128,7 @@ export function useDashboardSocket() {
       setGameStatus('setup');
       setPlayers([]);
       setCurrentPhase(null);
-      setVoteProgress({ count: 0, total: 0 });
+      setVoteProgress({ count: 0, total: 0, pending: [] });
       setSpeechOrder(null);
       setTimer(null);
       setPhaseResult(null);
@@ -148,7 +155,7 @@ export function useDashboardSocket() {
       setCurrentPhase(phase);
       setPhaseResult(null);
       setEliminatedPlayer(null);
-      setVoteProgress({ count: 0, total: 0 });
+      setVoteProgress({ count: 0, total: 0, pending: [] });
       setSpeechOrder(null);
       setTimer(null); // Clear any previous timer to prevent stacking
 
@@ -171,7 +178,11 @@ export function useDashboardSocket() {
 
     socket.on('phase:vote_update', (data) => {
       if (data.voteCount !== undefined && data.totalExpected !== undefined) {
-        setVoteProgress({ count: data.voteCount, total: data.totalExpected });
+        setVoteProgress({
+          count: data.voteCount,
+          total: data.totalExpected,
+          pending: data.pendingVoters || [],
+        });
       }
     });
 
@@ -317,7 +328,11 @@ export function useDashboardSocket() {
           }
         }
         if (data.voteCount !== undefined && data.totalExpected !== undefined) {
-          setVoteProgress({ count: data.voteCount, total: data.totalExpected });
+          setVoteProgress({
+            count: data.voteCount,
+            total: data.totalExpected,
+            pending: data.pendingVoters || [],
+          });
         }
       })
       .catch(() => {
@@ -331,6 +346,10 @@ export function useDashboardSocket() {
     connect();
     return () => disconnect();
   }, [connect, disconnect]);
+
+  // The dashboard is projected and never touched: nobody is there to notice it
+  // froze, so it re-syncs itself.
+  useLiveSync(() => socketRef.current);
 
   return {
     connected,

@@ -4,6 +4,7 @@ import {
   emitToAdmin,
   emitToDashboard,
   computeVoteCounts,
+  computePendingVoters,
 } from './socket-rooms.js';
 import logger from './logger.js';
 
@@ -76,6 +77,28 @@ export function registerSocketHandlers(io) {
 
       // Send full dashboard state sync
       sendDashboardStateSync(socket);
+    });
+
+    // ─── On-demand re-sync ────────────────────────────────────────────────────
+    // Clients ask for this when they come back to the foreground, regain
+    // network, or notice their heartbeat went quiet. A phone that slept through
+    // a phase transition still holds a live-looking socket, so waiting for a
+    // reconnect that never happens is exactly how a screen goes stale.
+    socket.on('client:resync', (ack) => {
+      if (socket.clientType === 'player' && socket.playerId) {
+        const player = getDb()
+          .prepare('SELECT * FROM players WHERE id = ?')
+          .get(socket.playerId);
+        if (player) sendPlayerStateSync(socket, player);
+      } else if (socket.clientType === 'admin') {
+        sendAdminStateSync(socket);
+      } else if (socket.clientType === 'dashboard') {
+        sendDashboardStateSync(socket);
+      }
+
+      // The ack doubles as a liveness probe: a client that never gets one back
+      // knows its socket is dead and rebuilds it.
+      if (typeof ack === 'function') ack({ ok: true, clientType: socket.clientType || null });
     });
 
     // ─── Disconnect ───────────────────────────────────────────────────────────
@@ -250,6 +273,7 @@ function sendDashboardStateSync(socket) {
   let currentPhase = null;
   let voteCount = 0;
   let totalExpected = 0;
+  let pendingVoters = [];
 
   if (currentPhaseId) {
     currentPhase = db.prepare('SELECT * FROM phases WHERE id = ?').get(Number(currentPhaseId));
@@ -258,6 +282,7 @@ function sendDashboardStateSync(socket) {
       const counts = computeVoteCounts(currentPhase.id, currentPhase.type);
       voteCount = counts.voteCount;
       totalExpected = counts.totalExpected;
+      pendingVoters = computePendingVoters(currentPhase.id, currentPhase.type);
     }
   }
 
@@ -290,6 +315,7 @@ function sendDashboardStateSync(socket) {
     playerCount,
     voteCount,
     totalExpected,
+    pendingVoters,
     timerState,
     challengeDisplayName: challengeDisplayName || null,
   });

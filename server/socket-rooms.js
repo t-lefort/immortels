@@ -128,6 +128,49 @@ export function updatePlayerRooms(io, playerId, newStatus, newRole = undefined) 
 }
 
 /**
+ * Alive players who still owe a vote for this phase.
+ *
+ * Night counts wolf + villager_guess together, exactly like computeVoteCounts:
+ * the pending list must never be shorter for one faction than the other, or the
+ * projected screen would leak roles. Ghost votes are excluded for the same
+ * reason the counter excludes them — they are not part of the public tally.
+ */
+export function computePendingVoters(phaseId, phaseType) {
+  const db = getDb();
+
+  const voteTypes = phaseType === 'night'
+    ? ['wolf', 'villager_guess']
+    : ['village'];
+
+  const placeholders = voteTypes.map(() => '?').join(', ');
+  return db
+    .prepare(`
+      SELECT id, name FROM players
+      WHERE status = 'alive'
+        AND id NOT IN (
+          SELECT voter_id FROM votes
+          WHERE phase_id = ? AND vote_type IN (${placeholders})
+        )
+      ORDER BY name
+    `)
+    .all(phaseId, ...voteTypes);
+}
+
+/**
+ * Full `phase:vote_update` payload for a phase: the counter plus the names
+ * still missing, so the dashboard can name them instead of only counting.
+ */
+export function buildVoteUpdate(phaseId, phaseType) {
+  const { voteCount, totalExpected } = computeVoteCounts(phaseId, phaseType);
+  return {
+    phaseId,
+    voteCount,
+    totalExpected,
+    pendingVoters: computePendingVoters(phaseId, phaseType),
+  };
+}
+
+/**
  * Compute the combined vote count for a phase.
  * For night phases: wolf + villager_guess votes (combined public counter).
  * For village_council phases: village votes.

@@ -4,6 +4,7 @@ import SetupTab from './SetupTab.jsx';
 import PhaseControlTab from './PhaseControlTab.jsx';
 import ChallengesTab from './ChallengesTab.jsx';
 import PlayersTab from './PlayersTab.jsx';
+import AccountsTab from './AccountsTab.jsx';
 import ScoresTab from './ScoresTab.jsx';
 import HistoryTab from './HistoryTab.jsx';
 import SettingsTab from './SettingsTab.jsx';
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'phases', label: 'Phases' },
   { id: 'challenges', label: 'Épreuves' },
   { id: 'players', label: 'Joueurs' },
+  { id: 'accounts', label: 'Comptes' },
   { id: 'scores', label: 'Scores' },
   { id: 'history', label: 'Historique' },
   { id: 'settings', label: 'Réglages' },
@@ -125,6 +127,7 @@ export default function AdminPage() {
       case 'phases': return <PhaseControlTab {...props} />;
       case 'challenges': return <ChallengesTab {...props} />;
       case 'players': return <PlayersTab {...props} />;
+      case 'accounts': return <AccountsTab {...props} />;
       case 'scores': return <ScoresTab {...props} />;
       case 'history': return <HistoryTab {...props} />;
       case 'settings': return <SettingsTab {...props} />;

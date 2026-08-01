@@ -48,6 +48,30 @@ export function markRoleSeen() {
   return request(`${PLAYER_BASE}/role-seen`, { method: 'POST' });
 }
 
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export function getProfile() {
+  return request(`${PLAYER_BASE}/profile`);
+}
+
+export function updateUsername(username) {
+  return request(`${PLAYER_BASE}/profile`, {
+    method: 'PUT',
+    body: JSON.stringify({ username }),
+  });
+}
+
+export function changePassword(currentPassword, newPassword) {
+  return request(`${PLAYER_BASE}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function logout() {
+  return request(`${PLAYER_BASE}/logout`, { method: 'POST' });
+}
+
 // ─── Game State ──────────────────────────────────────────────────────────────
 
 export function getGameState() {

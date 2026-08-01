@@ -11,12 +11,8 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
   const rankedScoreboard = rankScoreboard(scoreboard);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const { incognito, toggleIncognito } = useIncognito();
-  const [peeked, setPeeked] = useState(() => new Set());
-
-  function peek(id) {
-    setPeeked(prev => new Set(prev).add(id));
-  }
+  // Shared with the Joueurs tab so a switch of the mode re-masks both.
+  const { incognito, toggleIncognito, isPeeked, togglePeek } = useIncognito();
 
   // The end-condition banner and the faction tallies count wolves, so they
   // give the split away just as surely as the role column does.
@@ -238,8 +234,8 @@ export default function ScoresTab({ players, refreshPlayers, gameStatus }) {
                   <td className="px-3 py-2">
                     <HiddenRole
                       incognito={incognito}
-                      peeked={peeked.has(p.id)}
-                      onPeek={() => peek(p.id)}
+                      peeked={isPeeked(p.id)}
+                      onPeek={() => togglePeek(p.id)}
                     >
                       {getRoleBadge(p.role, p.special_role)}
                     </HiddenRole>

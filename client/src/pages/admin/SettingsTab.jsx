@@ -352,6 +352,10 @@ function BackupPanel({ onNotify, refreshPlayers, reloadSettings }) {
 function ArchivesPanel({ onNotify }) {
   const [archives, setArchives] = useState([]);
   const [busy, setBusy] = useState('');
+  const [label, setLabel] = useState(() => `Partie du ${new Date().toLocaleDateString('fr-FR')}`);
+  // Feedback stays next to the button: the page-level banner sits far above,
+  // off screen by the time you have scrolled down to the archives.
+  const [status, setStatus] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -363,16 +367,22 @@ function ArchivesPanel({ onNotify }) {
     load();
   }, [load]);
 
+  /**
+   * Archives the current game. The label used to come from a `prompt()`, which
+   * a browser silently answers `null` once the user has ticked "prevent this
+   * page from creating more dialogs" — and the admin panel opens plenty of
+   * them. The button then did nothing at all, with no error to show for it.
+   */
   async function handleArchiveNow() {
-    const label = prompt('Nom de cette partie ?', `Partie du ${new Date().toLocaleDateString('fr-FR')}`);
-    if (label === null) return;
-
     setBusy('create');
+    setStatus(null);
     try {
-      await api.createArchive(label);
+      const archive = await api.createArchive(label.trim());
       await load();
+      setStatus({ type: 'success', text: `Archivee : ${archive.label}` });
       onNotify({ type: 'success', text: 'Partie archivee' });
     } catch (err) {
+      setStatus({ type: 'error', text: err.message });
       onNotify({ type: 'error', text: err.message });
     }
     setBusy('');
@@ -394,22 +404,36 @@ function ArchivesPanel({ onNotify }) {
 
   return (
     <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <h2 className="text-lg font-semibold">Parties archivees ({archives.length})</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Conservees malgre un reset. Les joueurs peuvent les consulter depuis
-            l'ecran de fin de partie.
-          </p>
-        </div>
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold">Parties archivees ({archives.length})</h2>
+        <p className="text-sm text-gray-400 mt-0.5">
+          Conservees malgre un reset. Les joueurs peuvent les consulter depuis
+          leur profil. Une partie archivee avant la fin reste reservee a l'admin.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Nom de cette partie"
+          className="flex-1 min-w-[12rem] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-gray-500"
+        />
         <button
           onClick={handleArchiveNow}
           disabled={!!busy}
           className="px-3 py-1.5 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 disabled:opacity-50 text-xs font-medium border border-gray-700 whitespace-nowrap"
         >
-          Archiver maintenant
+          {busy === 'create' ? 'Archivage...' : 'Archiver maintenant'}
         </button>
       </div>
+
+      {status && (
+        <p className={`text-xs mb-3 ${status.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+          {status.text}
+        </p>
+      )}
 
       {archives.length === 0 ? (
         <p className="text-gray-500 text-sm">Aucune partie archivee</p>
@@ -421,7 +445,14 @@ function ArchivesPanel({ onNotify }) {
               className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-800/50 rounded-lg"
             >
               <div className="min-w-0">
-                <div className="text-sm text-white truncate">{a.label}</div>
+                <div className="text-sm text-white truncate">
+                  {a.label}
+                  {a.gameStatus && a.gameStatus !== 'finished' && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[0.65rem] bg-yellow-900/50 text-yellow-300 align-middle">
+                      partie non terminee — admin seulement
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-gray-500">
                   {formatArchiveDate(a.archivedAt)}
                   {a.winner && ` · Victoire des ${a.winner === 'wolves' ? 'Loups' : 'Villageois'}`}

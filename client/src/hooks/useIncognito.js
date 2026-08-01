@@ -12,7 +12,9 @@ const STORAGE_KEY = 'admin_incognito';
  *
  * Backed by a module-level store rather than per-component state so the
  * header, the Joueurs tab and the Scores tab never disagree about whether
- * roles are currently on screen.
+ * roles are currently on screen — including the rows revealed one by one,
+ * which are part of the same store: switching the mode off and back on has to
+ * hide everything again, not leave a hand-picked row exposed on another tab.
  */
 
 function readInitial() {
@@ -21,17 +23,33 @@ function readInitial() {
 }
 
 let incognitoValue = readInitial();
+let peekedValue = new Set();
 const listeners = new Set();
+
+function notify() {
+  for (const listener of listeners) listener();
+}
 
 function setIncognitoValue(next) {
   if (next === incognitoValue) return;
   incognitoValue = next;
+  // Any switch of the mode wipes the manual reveals: "masquer les rôles"
+  // must mean every role, not every role except the ones already peeked at.
+  peekedValue = new Set();
   try {
     localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
   } catch {
     // Private browsing — the in-memory value still works for this session
   }
-  for (const listener of listeners) listener();
+  notify();
+}
+
+function togglePeekedValue(id) {
+  const next = new Set(peekedValue);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  peekedValue = next;
+  notify();
 }
 
 function subscribe(listener) {
@@ -43,8 +61,13 @@ function getSnapshot() {
   return incognitoValue;
 }
 
+function getPeekedSnapshot() {
+  return peekedValue;
+}
+
 export function useIncognito() {
   const incognito = useSyncExternalStore(subscribe, getSnapshot, () => true);
+  const peeked = useSyncExternalStore(subscribe, getPeekedSnapshot, () => peekedValue);
 
   const setIncognito = useCallback((next) => {
     setIncognitoValue(typeof next === 'function' ? next(incognitoValue) : next);
@@ -52,5 +75,10 @@ export function useIncognito() {
 
   const toggleIncognito = useCallback(() => setIncognitoValue(!incognitoValue), []);
 
-  return { incognito, setIncognito, toggleIncognito };
+  /** Reveal a single row, or hide it again if it is already revealed. */
+  const togglePeek = useCallback((id) => togglePeekedValue(id), []);
+
+  const isPeeked = useCallback((id) => peeked.has(id), [peeked]);
+
+  return { incognito, setIncognito, toggleIncognito, peeked, togglePeek, isPeeked };
 }

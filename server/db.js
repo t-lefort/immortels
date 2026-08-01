@@ -139,11 +139,15 @@ function initSchema() {
       created_at    DATETIME NOT NULL DEFAULT (datetime('now'))
     );
 
-    -- Finished games kept across resets so players can review them later
+    -- Finished games kept across resets so players can review them later.
+    -- game_status is the status the game had when it was archived: the admin
+    -- can archive mid-game as a safety copy, and such a snapshot must never
+    -- reach the players — it holds every role of the game they are playing.
     CREATE TABLE IF NOT EXISTS archived_games (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       label       TEXT NOT NULL,
       winner      TEXT,
+      game_status TEXT NOT NULL DEFAULT 'finished',
       archived_at DATETIME NOT NULL DEFAULT (datetime('now')),
       data_json   TEXT NOT NULL
     );
@@ -183,6 +187,13 @@ function runMigrations() {
   db.exec(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username ON players(username) WHERE username IS NOT NULL'
   );
+
+  // Archives created before this column existed were all end-of-game archives,
+  // so the 'finished' default is the right value for them.
+  const archiveCols = db.prepare('PRAGMA table_info(archived_games)').all();
+  if (!archiveCols.some(c => c.name === 'game_status')) {
+    db.exec("ALTER TABLE archived_games ADD COLUMN game_status TEXT NOT NULL DEFAULT 'finished'");
+  }
 }
 
 /**
